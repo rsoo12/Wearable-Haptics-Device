@@ -59,7 +59,7 @@ void setup() {
 
   pCharacteristic->setCallbacks(new MyCallbacks());
   pService->start();
-
+  delay(100);
   BLEAdvertising *pAdvertising = pServer->getAdvertising();
   pAdvertising->start();
   // Use random analog noise to create random seed

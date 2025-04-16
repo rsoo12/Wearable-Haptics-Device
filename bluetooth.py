@@ -12,16 +12,16 @@ async def find_device(name_prefix="TestESP32C3"):
             return device.address
     return None
 
-def callback(sender, data):
-    print(f"Received data: {data}")
+# def callback(sender, data):
+#     print(f"Received data: {data}")
 
 async def connect_and_read(app):
     async with BleakClient(app.device.address) as client:
         counter = 0
         await asyncio.sleep(0.15)
-        await client.write_gatt_char(app.device.char_uuid, b"START")
-        print("sent START")
-        await client.start_notify(app.device.char_uuid, callback)
+        # await client.write_gatt_char(app.device.char_uuid, b"START")
+        # print("sent START")
+        # await client.start_notify(app.device.char_uuid, callback)
         while True:
             value = await client.read_gatt_char(app.device.char_uuid)
             # unpack the data 
