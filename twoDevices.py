@@ -92,12 +92,11 @@ async def main(
     uuids: Iterable[str],
 ):
     lock = asyncio.Lock()
-    vals = [0, 0]
 
     await asyncio.gather(
         *(
-            connect_to_device(lock, by_address, macos_use_bdaddr, address, uuid, val)
-            for address, uuid, val in zip(addresses, uuids, vals)
+            connect_to_device(lock, by_address, macos_use_bdaddr, address, uuid)
+            for address, uuid in zip(addresses, uuids)
         )
     )
 
