@@ -57,9 +57,6 @@ void setup(void)
   pService->start();
 
   BLEAdvertising *pAdvertising = pServer->getAdvertising();
-  // BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
-  // pAdvertising->addServiceUUID(SERVICE_UUID);
-  // pAdvertising->setScanResponse(false);
   pAdvertising->start();
 }
 
@@ -71,18 +68,13 @@ void sendDataFrame(){
   TX_FrameTransfer[1]=HEADER2; // add second header to Frame
   TX_FrameTransfer[2]=((cnt&0xff00)>>8); // add High byte to Frame
   TX_FrameTransfer[3]=((cnt&0x00ff)); // add Low byte to Frame
-  
-  // for(unsigned int i=0;i<4;i++)// loop for transfer 4 byte data 
-  // {
-  //   Serial.write(TX_FrameTransfer[i]);
-  // }
 
   pCharacteristic->setValue(TX_FrameTransfer, sizeof(TX_FrameTransfer));
   pCharacteristic->notify();
   }
 
 void loop() {
-  if (deviceConnected && (millis() - lastSendTime) >= sendInterval)
+  if (deviceConnected && ((millis() - lastSendTime) >= sendInterval))
   {
     sendDataFrame();
     lastSendTime = millis();
