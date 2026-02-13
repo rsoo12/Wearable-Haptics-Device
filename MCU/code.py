@@ -21,36 +21,30 @@ advertisement = ProvideServicesAdvertisement(uart)
 led = digitalio.DigitalInOut(board.LED_BLUE)
 led.direction = digitalio.Direction.OUTPUT
 
-# IMU power and initialization
 imupwr = digitalio.DigitalInOut(board.IMU_PWR)
 imupwr.direction = digitalio.Direction.OUTPUT
 imupwr.value = True
 time.sleep(0.1)
-i2c = board.I2C()  # uses board.SCL and board.SDA
+i2c = board.I2C()  
 imu_i2c = busio.I2C(board.IMU_SCL, board.IMU_SDA)
 sensor = LSM6DS3TRC(imu_i2c)
 
 mux = adafruit_tca9548a.PCA9546A(i2c)
-
-# Initialize two DRV2605 haptic drivers
 drv1 = adafruit_drv2605.DRV2605(mux[3])
 
 ble.start_advertising(advertisement)
 
 while True:
     if ble.connected:
-        led.value = False  # LED ON
-        # Read IMU and send data over BLE UART
+        led.value = False 
         accel_x, accel_y, accel_z = sensor.acceleration
         gyro_x, gyro_y, gyro_z = sensor.gyro
         data = f"Accel: {accel_x:.2f},{accel_y:.2f}\n"
         uart.write(data.encode("utf-8"))
-        # Receive data from central
         waiting = uart.in_waiting
         if waiting:
             received = uart.read(waiting)
             if received is not None:
-                # Process received data (as string)
                 try:
                     received_str = received.decode("utf-8").strip()
                 except Exception as e:
@@ -68,12 +62,9 @@ while True:
                   print("THIRD")
                 drv1.play()
                 time.sleep(0.5)
-                  
-                  
-                # You can add custom logic here to handle commands
         time.sleep(1)
     else:
-        led.value = True  # LED OFF
+        led.value = True
 
 
 #*****************************************************************************# 
