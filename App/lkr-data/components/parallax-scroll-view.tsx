@@ -1,5 +1,6 @@
 import type { PropsWithChildren, ReactElement } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   interpolate,
   useAnimatedRef,
@@ -8,6 +9,12 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { ThemedView } from '@/components/themed-view';
+import {
+  IPHONE_13_CONTENT_HORIZONTAL_INSET,
+  IPHONE_13_LAYOUT_WIDTH,
+  PARALLAX_CONTENT_TOP_PADDING,
+  TAB_BAR_HEIGHT,
+} from '@/constants/layout';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
@@ -25,6 +32,9 @@ export default function ParallaxScrollView({
 }: Props) {
   const backgroundColor = useThemeColor({}, 'background');
   const colorScheme = useColorScheme() ?? 'light';
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const columnWidth = Math.min(IPHONE_13_LAYOUT_WIDTH, windowWidth);
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollOffset(scrollRef);
   const headerAnimatedStyle = useAnimatedStyle(() => {
@@ -57,7 +67,19 @@ export default function ParallaxScrollView({
         ]}>
         {headerImage}
       </Animated.View>
-      <ThemedView style={styles.content}>{children}</ThemedView>
+      <ThemedView
+        style={[
+          styles.content,
+          {
+            width: columnWidth,
+            alignSelf: 'center',
+            paddingHorizontal: IPHONE_13_CONTENT_HORIZONTAL_INSET,
+            paddingTop: PARALLAX_CONTENT_TOP_PADDING,
+            paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 24,
+          },
+        ]}>
+        {children}
+      </ThemedView>
     </Animated.ScrollView>
   );
 }
@@ -72,7 +94,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 32,
     gap: 16,
     overflow: 'hidden',
   },

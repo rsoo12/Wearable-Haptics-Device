@@ -1,0 +1,37 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Minimal API Gateway -> Lambda "hello" for lkr-data app
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    MemorySize: 128
+    Timeout: 5
+Resources:
+  HelloApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: '''GET,OPTIONS'''
+        AllowHeaders: '''content-type'''
+        AllowOrigin: '''*'''
+  HelloFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: HelloFunction
+      Handler: hello.handler
+      Events:
+        HelloGet:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: HelloApi
+            Path: /hello
+            Method: GET
+    Metadata:
+      SamResourceId: HelloFunction
+Outputs:
+  ApiBaseUrl:
+    Description: Base URL for the API (prod stage)
+    Value:
+      Fn::Sub: https://${HelloApi}.execute-api.${AWS::Region}.amazonaws.com/prod
