@@ -25,6 +25,15 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="backend"
+        options={{
+          title: 'Backend',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="cloud" color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }

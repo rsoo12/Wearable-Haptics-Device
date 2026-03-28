@@ -1,11 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BleManager, Characteristic, Device, Service, Subscription } from 'react-native-ble-plx';
 import { encode as btoa, decode as atob } from 'base-64';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useIphone13ContentFrame } from '@/hooks/use-iphone13-content-frame';
 
 type LogEntry = {
   id: string;
@@ -20,13 +22,13 @@ type DiscoveredChar = {
   summary: string;
 };
 
-// iPhone 13 viewport: 390×844 pt; use consistent spacing and 44pt min touch targets
-const HORIZONTAL_PADDING = 20;
 const SECTION_GAP = 18;
-const TAB_BAR_HEIGHT = 49;
 
 export default function BluetoothScreen() {
-  const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
+  const { scrollContentStyle } = useIphone13ContentFrame({ includeTabBarInset: true });
+  const stylesThemed = useMemo(() => createStyles(theme), [theme]);
   const [manager, setManager] = useState<BleManager | null>(null);
   const [bleError, setBleError] = useState<string | null>(null);
   const scanSubscription = useRef<Subscription | null>(null);
@@ -63,7 +65,7 @@ export default function BluetoothScreen() {
         notificationSubscription.current?.remove();
         m.destroy();
       };
-    } catch (error: any) {
+    } catch {
       setBleError(
         'Failed to initialize Bluetooth. On Expo, make sure you are using a dev client with react-native-ble-plx installed.',
       );
@@ -277,165 +279,159 @@ export default function BluetoothScreen() {
           const decoded = atob(characteristic.value);
           setIncomingMessages(prev => [decoded, ...prev].slice(0, 50));
           appendLog(`Received: "${decoded}"`);
-        } catch (e: any) {
+        } catch {
           appendLog(`Received (raw base64): ${characteristic.value}`);
         }
       },
     );
   };
 
-  const contentPadding = {
-    paddingTop: Math.max(insets.top, 12),
-    paddingHorizontal: HORIZONTAL_PADDING,
-    paddingBottom: insets.bottom + TAB_BAR_HEIGHT + 24,
-  };
-
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={stylesThemed.container}>
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[styles.scrollContent, contentPadding]}
+        style={stylesThemed.scrollView}
+        contentContainerStyle={[stylesThemed.scrollContent, scrollContentStyle]}
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled">
-        <ThemedText type="title" style={styles.title}>
+        <ThemedText type="title" style={stylesThemed.title}>
           Bluetooth Console
         </ThemedText>
 
-        <ThemedView style={styles.section}>
+        <ThemedView style={stylesThemed.section}>
           <ThemedText type="subtitle">Connection</ThemedText>
           {bleError && (
-            <ThemedText style={styles.errorText}>
+            <ThemedText style={stylesThemed.errorText}>
               {bleError}
             </ThemedText>
           )}
-          <ThemedText style={styles.statusText}>
+          <ThemedText style={stylesThemed.statusText}>
             Status:{' '}
             {connectedDevice
               ? `Connected to ${connectedDevice.name ?? 'Unnamed'} (${connectedDevice.id})`
               : 'Not connected'}
           </ThemedText>
-          <View style={styles.row}>
+          <View style={stylesThemed.row}>
             <TouchableOpacity
-              style={[styles.button, isScanning && styles.buttonSecondary]}
+              style={[stylesThemed.button, isScanning && stylesThemed.buttonSecondary]}
               onPress={isScanning ? stopScan : startScan}
               activeOpacity={0.7}>
-              <ThemedText style={styles.buttonText}>{isScanning ? 'Stop Scan' : 'Scan'}</ThemedText>
+              <ThemedText style={stylesThemed.buttonText}>{isScanning ? 'Stop Scan' : 'Scan'}</ThemedText>
             </TouchableOpacity>
             {connectedDevice && (
-              <TouchableOpacity style={styles.buttonDanger} onPress={disconnect} activeOpacity={0.7}>
-                <ThemedText style={styles.buttonText}>Disconnect</ThemedText>
+              <TouchableOpacity style={stylesThemed.buttonDanger} onPress={disconnect} activeOpacity={0.7}>
+                <ThemedText style={stylesThemed.buttonText}>Disconnect</ThemedText>
               </TouchableOpacity>
             )}
           </View>
         </ThemedView>
 
-        <ScrollView style={styles.devicesList} contentContainerStyle={styles.devicesListContent} nestedScrollEnabled>
+        <ScrollView style={stylesThemed.devicesList} contentContainerStyle={stylesThemed.devicesListContent} nestedScrollEnabled>
           {devices.length === 0 ? (
-            <ThemedText style={styles.muted}>No devices found yet. Tap Scan to begin.</ThemedText>
+            <ThemedText style={stylesThemed.muted}>No devices found yet. Tap Scan to begin.</ThemedText>
           ) : (
             devices.map(device => (
               <TouchableOpacity
                 key={device.id}
                 style={[
-                  styles.deviceItem,
-                  connectedDevice?.id === device.id && styles.deviceItemConnected,
+                  stylesThemed.deviceItem,
+                  connectedDevice?.id === device.id && stylesThemed.deviceItemConnected,
                 ]}
                 onPress={() => connectToDevice(device)}
                 activeOpacity={0.7}>
                 <ThemedText type="defaultSemiBold" numberOfLines={1}>
                   {device.name ?? 'Unnamed device'}
                 </ThemedText>
-                <ThemedText style={styles.deviceMeta} numberOfLines={1}>{device.id}</ThemedText>
+                <ThemedText style={stylesThemed.deviceMeta} numberOfLines={1}>{device.id}</ThemedText>
               </TouchableOpacity>
             ))
           )}
         </ScrollView>
 
         {connectedDevice && (
-          <ThemedView style={styles.section}>
+          <ThemedView style={stylesThemed.section}>
             <ThemedText type="subtitle">Discovered (tap to use for Send/Listen)</ThemedText>
             {discoveryLoading ? (
-              <ThemedText style={styles.muted}>Discovering services and characteristics…</ThemedText>
+              <ThemedText style={stylesThemed.muted}>Discovering services and characteristics…</ThemedText>
             ) : discoveredChars.length === 0 ? (
-              <ThemedText style={styles.muted}>
+              <ThemedText style={stylesThemed.muted}>
                 No writable/notify characteristics found. Enter UUIDs below or refresh.
               </ThemedText>
             ) : (
-              <ScrollView style={styles.discoveredList} nestedScrollEnabled>
+              <ScrollView style={stylesThemed.discoveredList} nestedScrollEnabled>
                 {discoveredChars.map((c, i) => (
                   <TouchableOpacity
                     key={`${c.serviceUUID}-${c.characteristicUUID}-${i}`}
                     style={[
-                      styles.discoveredItem,
-                      serviceUUID === c.serviceUUID && characteristicUUID === c.characteristicUUID && styles.discoveredItemSelected,
+                      stylesThemed.discoveredItem,
+                      serviceUUID === c.serviceUUID && characteristicUUID === c.characteristicUUID && stylesThemed.discoveredItemSelected,
                     ]}
                     onPress={() => selectDiscoveredChar(c)}
                     activeOpacity={0.7}>
-                    <ThemedText type="defaultSemiBold" numberOfLines={1} style={styles.discoveredCharId}>
+                    <ThemedText type="defaultSemiBold" numberOfLines={1} style={stylesThemed.discoveredCharId}>
                       {c.characteristicUUID}
                     </ThemedText>
-                    <ThemedText style={styles.muted}>{c.summary}</ThemedText>
+                    <ThemedText style={stylesThemed.muted}>{c.summary}</ThemedText>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             )}
             {connectedDevice && !discoveryLoading && (
-              <TouchableOpacity style={styles.buttonSecondary} onPress={() => discoverServicesAndCharacteristics(connectedDevice)} activeOpacity={0.7}>
-                <ThemedText style={styles.buttonText}>Refresh discovery</ThemedText>
+              <TouchableOpacity style={stylesThemed.buttonSecondary} onPress={() => discoverServicesAndCharacteristics(connectedDevice)} activeOpacity={0.7}>
+                <ThemedText style={stylesThemed.buttonText}>Refresh discovery</ThemedText>
               </TouchableOpacity>
             )}
           </ThemedView>
         )}
 
-        <ThemedView style={styles.section}>
+        <ThemedView style={stylesThemed.section}>
           <ThemedText type="subtitle">Service &amp; Characteristic (optional if one is selected above)</ThemedText>
           <TextInput
             value={serviceUUID}
             onChangeText={setServiceUUID}
             placeholder="Service UUID (auto-filled when discovered)"
-            placeholderTextColor="#999"
-            style={styles.input}
+            placeholderTextColor={theme.placeholder}
+            style={stylesThemed.input}
             autoCapitalize="none"
           />
           <TextInput
             value={characteristicUUID}
             onChangeText={setCharacteristicUUID}
             placeholder="Characteristic UUID (auto-filled when discovered)"
-            placeholderTextColor="#999"
-            style={styles.input}
+            placeholderTextColor={theme.placeholder}
+            style={stylesThemed.input}
             autoCapitalize="none"
           />
-          <View style={styles.row}>
-            <TouchableOpacity style={styles.button} onPress={startListening} activeOpacity={0.7}>
-              <ThemedText style={styles.buttonText}>Listen</ThemedText>
+          <View style={stylesThemed.row}>
+            <TouchableOpacity style={stylesThemed.button} onPress={startListening} activeOpacity={0.7}>
+              <ThemedText style={stylesThemed.buttonText}>Listen</ThemedText>
             </TouchableOpacity>
           </View>
         </ThemedView>
 
-        <ThemedView style={styles.section}>
+        <ThemedView style={stylesThemed.section}>
           <ThemedText type="subtitle">Send Data</ThemedText>
           <TextInput
             value={outgoingText}
             onChangeText={setOutgoingText}
             placeholder="Type message to send"
-            placeholderTextColor="#999"
-            style={styles.input}
+            placeholderTextColor={theme.placeholder}
+            style={stylesThemed.input}
           />
-          <View style={styles.row}>
-            <TouchableOpacity style={styles.button} onPress={sendData} activeOpacity={0.7}>
-              <ThemedText style={styles.buttonText}>Send</ThemedText>
+          <View style={stylesThemed.row}>
+            <TouchableOpacity style={stylesThemed.button} onPress={sendData} activeOpacity={0.7}>
+              <ThemedText style={stylesThemed.buttonText}>Send</ThemedText>
             </TouchableOpacity>
           </View>
         </ThemedView>
 
-        <ThemedView style={styles.section}>
+        <ThemedView style={stylesThemed.section}>
           <ThemedText type="subtitle">Received Data</ThemedText>
-          <ScrollView style={styles.messagesSection} nestedScrollEnabled>
+          <ScrollView style={stylesThemed.messagesSection} nestedScrollEnabled>
             {incomingMessages.length === 0 ? (
-              <ThemedText style={styles.muted}>No data received yet.</ThemedText>
+              <ThemedText style={stylesThemed.muted}>No data received yet.</ThemedText>
             ) : (
               incomingMessages.map((msg, index) => (
-                <ThemedText key={`${msg}-${index}`} style={styles.messageItem} numberOfLines={3}>
+                <ThemedText key={`${msg}-${index}`} style={stylesThemed.messageItem} numberOfLines={3}>
                   {msg}
                 </ThemedText>
               ))
@@ -443,14 +439,14 @@ export default function BluetoothScreen() {
           </ScrollView>
         </ThemedView>
 
-        <ThemedView style={styles.section}>
+        <ThemedView style={stylesThemed.section}>
           <ThemedText type="subtitle">Logs</ThemedText>
-          <ScrollView style={styles.logsSection} nestedScrollEnabled>
+          <ScrollView style={stylesThemed.logsSection} nestedScrollEnabled>
             {logs.length === 0 ? (
-              <ThemedText style={styles.muted}>No logs yet.</ThemedText>
+              <ThemedText style={stylesThemed.muted}>No logs yet.</ThemedText>
             ) : (
               logs.map(entry => (
-                <ThemedText key={entry.id} style={styles.logItem} numberOfLines={2}>
+                <ThemedText key={entry.id} style={stylesThemed.logItem} numberOfLines={2}>
                   {entry.message}
                 </ThemedText>
               ))
@@ -462,135 +458,141 @@ export default function BluetoothScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    gap: SECTION_GAP,
-    paddingBottom: 8,
-  },
-  title: {
-    marginBottom: 6,
-    marginTop: 4,
-  },
-  section: {
-    gap: 10,
-  },
-  errorText: {
-    fontSize: 13,
-    color: '#FF3B30',
-    marginTop: 2,
-  },
-  statusText: {
-    fontSize: 15,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 10,
-    flexWrap: 'wrap',
-  },
-  button: {
-    paddingHorizontal: 20,
-    minHeight: 44,
-    borderRadius: 10,
-    backgroundColor: '#007AFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonSecondary: {
-    backgroundColor: '#5AC8FA',
-  },
-  buttonDanger: {
-    paddingHorizontal: 20,
-    minHeight: 44,
-    borderRadius: 10,
-    backgroundColor: '#FF3B30',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  devicesList: {
-    maxHeight: 152,
-    borderRadius: 10,
-    marginTop: 2,
-  },
-  devicesListContent: {
-    paddingVertical: 6,
-    paddingRight: 4,
-  },
-  deviceItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#CCC',
-    marginBottom: 8,
-  },
-  deviceItemConnected: {
-    borderColor: '#007AFF',
-    backgroundColor: '#E6F0FF',
-  },
-  deviceMeta: {
-    fontSize: 12,
-    color: '#777',
-    marginTop: 2,
-  },
-  discoveredList: {
-    maxHeight: 140,
-    marginTop: 4,
-  },
-  discoveredItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#CCC',
-    marginBottom: 6,
-  },
-  discoveredItemSelected: {
-    borderColor: '#007AFF',
-    backgroundColor: '#E6F0FF',
-  },
-  discoveredCharId: {
-    fontSize: 12,
-  },
-  input: {
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#CCC',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    minHeight: 44,
-    color: '#000',
-  },
-  messagesSection: {
-    maxHeight: 110,
-    marginTop: 4,
-  },
-  messageItem: {
-    paddingVertical: 6,
-    fontSize: 14,
-  },
-  logsSection: {
-    maxHeight: 130,
-    marginTop: 4,
-  },
-  logItem: {
-    fontSize: 12,
-    paddingVertical: 4,
-    color: '#555',
-  },
-  muted: {
-    color: '#777',
-    fontSize: 13,
-  },
-});
+function createStyles(theme: (typeof Colors)['light']) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      gap: SECTION_GAP,
+      paddingBottom: 8,
+    },
+    title: {
+      marginBottom: 6,
+      marginTop: 4,
+    },
+    section: {
+      gap: 10,
+    },
+    errorText: {
+      fontSize: 13,
+      color: theme.buttonDestructive,
+      marginTop: 2,
+    },
+    statusText: {
+      fontSize: 15,
+      color: theme.text,
+    },
+    row: {
+      flexDirection: 'row',
+      gap: 10,
+      flexWrap: 'wrap',
+    },
+    button: {
+      paddingHorizontal: 20,
+      minHeight: 44,
+      borderRadius: 10,
+      backgroundColor: theme.buttonPrimary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    buttonSecondary: {
+      backgroundColor: theme.buttonSecondary,
+    },
+    buttonDanger: {
+      paddingHorizontal: 20,
+      minHeight: 44,
+      borderRadius: 10,
+      backgroundColor: theme.buttonDestructive,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    buttonText: {
+      color: theme.buttonOnPrimary,
+      fontWeight: '600',
+      fontSize: 16,
+    },
+    devicesList: {
+      maxHeight: 152,
+      borderRadius: 10,
+      marginTop: 2,
+    },
+    devicesListContent: {
+      paddingVertical: 6,
+      paddingRight: 4,
+    },
+    deviceItem: {
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border,
+      marginBottom: 8,
+      backgroundColor: theme.inputBackground,
+    },
+    deviceItemConnected: {
+      borderColor: theme.buttonPrimary,
+      backgroundColor: theme.surfaceSelected,
+    },
+    deviceMeta: {
+      fontSize: 12,
+      color: theme.muted,
+      marginTop: 2,
+    },
+    discoveredList: {
+      maxHeight: 140,
+      marginTop: 4,
+    },
+    discoveredItem: {
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border,
+      marginBottom: 6,
+      backgroundColor: theme.inputBackground,
+    },
+    discoveredItemSelected: {
+      borderColor: theme.buttonPrimary,
+      backgroundColor: theme.surfaceSelected,
+    },
+    discoveredCharId: {
+      fontSize: 12,
+    },
+    input: {
+      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.border,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 16,
+      minHeight: 44,
+      color: theme.text,
+      backgroundColor: theme.inputBackground,
+    },
+    messagesSection: {
+      maxHeight: 110,
+      marginTop: 4,
+    },
+    messageItem: {
+      paddingVertical: 6,
+      fontSize: 14,
+    },
+    logsSection: {
+      maxHeight: 130,
+      marginTop: 4,
+    },
+    logItem: {
+      fontSize: 12,
+      paddingVertical: 4,
+      color: theme.muted,
+    },
+    muted: {
+      color: theme.muted,
+      fontSize: 13,
+    },
+  });
+}

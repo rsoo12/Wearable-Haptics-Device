@@ -16,6 +16,22 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npx expo start
    ```
 
+## Backend (AWS API Gateway + Lambda)
+
+This repo includes a minimal backend at `App/lkr-data/backend/` (AWS SAM).
+
+- Deploy it (see `App/lkr-data/backend/README.md`) to get an `ApiBaseUrl`
+- Set that URL in the app as `EXPO_PUBLIC_API_BASE_URL`
+
+Example (macOS/zsh, from `App/lkr-data`):
+
+```bash
+export EXPO_PUBLIC_API_BASE_URL="https://abc123.execute-api.us-east-1.amazonaws.com/prod"
+npx expo start
+```
+
+Then open the **Backend** tab and tap **Call AWS Lambda**.
+
 In the output, you'll find options to open the app in a
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)
