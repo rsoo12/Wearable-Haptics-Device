@@ -14,57 +14,26 @@ from adafruit_lsm6ds.lsm6ds3trc import LSM6DS3TRC
 import adafruit_drv2605
 import adafruit_tca9548a
 
-ble = BLERadio()
-uart = UARTService()
-advertisement = ProvideServicesAdvertisement(uart)
-
 led = digitalio.DigitalInOut(board.LED_BLUE)
-led.direction = digitalio.Direction.OUTPUT
+led.value = False
 
-imupwr = digitalio.DigitalInOut(board.IMU_PWR)
-imupwr.direction = digitalio.Direction.OUTPUT
-imupwr.value = True
-time.sleep(0.1)
 i2c = board.I2C()  
-imu_i2c = busio.I2C(board.IMU_SCL, board.IMU_SDA)
-sensor = LSM6DS3TRC(imu_i2c)
 
 mux = adafruit_tca9548a.PCA9546A(i2c)
 drv1 = adafruit_drv2605.DRV2605(mux[3])
-
-ble.start_advertising(advertisement)
+drv2 = adafruit_drv2605.DRV2605(mux[4])
 
 while True:
-    if ble.connected:
-        led.value = False 
-        accel_x, accel_y, accel_z = sensor.acceleration
-        gyro_x, gyro_y, gyro_z = sensor.gyro
-        data = f"Accel: {accel_x:.2f},{accel_y:.2f}\n"
-        uart.write(data.encode("utf-8"))
-        waiting = uart.in_waiting
-        if waiting:
-            received = uart.read(waiting)
-            if received is not None:
-                try:
-                    received_str = received.decode("utf-8").strip()
-                except Exception as e:
-                    print(f"Error decoding UART data: {e}")
-                    received_str = None
-                print(f"Received: {received_str}")
-                if (received_str == 'a'):
-                  drv1.sequence[0] = adafruit_drv2605.Effect(52)
-                  print("FIRST")
-                elif (received_str == 'b'):
-                  drv1.sequence[0] = adafruit_drv2605.Effect(1)
-                  print("SECOND")
-                else:
-                  drv1.sequence[0] = adafruit_drv2605.Effect(41)
-                  print("THIRD")
-                drv1.play()
-                time.sleep(0.5)
-        time.sleep(1)
-    else:
-        led.value = True
+    drv1.sequence[0] = adafruit_drv2605.Effect(52)
+    drv1.sequence[1] = adafruit_drv2605.Effect(1)
+    drv1.sequence[2] = adafruit_drv2605.Effect(41)
+    drv1.play()
+    drv2.sequence[0] = adafruit_drv2605.Effect(52)
+    drv2.sequence[1] = adafruit_drv2605.Effect(1)
+    drv2.sequence[2] = adafruit_drv2605.Effect(41)
+    drv2.play()
+    
+    time.sleep(0.5)
 
 
 #*****************************************************************************# 
