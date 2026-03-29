@@ -4,7 +4,7 @@ Description: Minimal API Gateway -> Lambda "hello" for lkr-data app
 
 Globals:
   Function:
-    Runtime: nodejs20.x
+    Runtime: python3.12
     MemorySize: 128
     Timeout: 5
 
