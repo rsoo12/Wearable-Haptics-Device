@@ -1,0 +1,4 @@
+# TAKEN FROM SAGEMOTION: https://github.com/SageMotionApps/004_Walking_Foot_Progression_Angle.git
+
+EULER_INIT_LEN = 5
+stance_status = [EARLY_STANCE, MIDDLE_STANCE, LATE_STANCE, SWING] = range(4)

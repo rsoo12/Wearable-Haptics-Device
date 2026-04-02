@@ -30,7 +30,7 @@ export EXPO_PUBLIC_API_BASE_URL="https://abc123.execute-api.us-east-1.amazonaws.
 npx expo start
 ```
 
-Then open the **Backend** tab and tap **Call AWS Lambda**.
+Then open the **Backend** tab. It auto-scans for the BLE device and streams packets to Lambda.
 
 In the output, you'll find options to open the app in a
 

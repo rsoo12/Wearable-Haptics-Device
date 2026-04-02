@@ -2,34 +2,37 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Minimal API Gateway -> Lambda "hello" for lkr-data app
 
-Globals:
-  Function:
-    Runtime: python3.12
-    MemorySize: 128
-    Timeout: 5
-
 Resources:
   HelloApi:
     Type: AWS::Serverless::Api
     Properties:
       StageName: prod
       Cors:
-        AllowMethods: "'GET,OPTIONS'"
-        AllowHeaders: "'content-type'"
+        AllowMethods: "'POST,OPTIONS'"
+        AllowHeaders: "'content-type,accept'"
         AllowOrigin: "'*'"
 
   HelloFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/
-      Handler: hello.handler
+      PackageType: Image
+      # Use arm64 so `sam build` on Apple Silicon builds linux/arm64 natively and avoids
+      # Docker Desktop "content digest ... not found" failures common with emulated amd64 builds.
+      Architectures:
+        - arm64
+      MemorySize: 1024
+      Timeout: 15
       Events:
-        HelloGet:
+        ProcessPost:
           Type: Api
           Properties:
             RestApiId: !Ref HelloApi
-            Path: /hello
-            Method: GET
+            Path: /process
+            Method: POST
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: .
+      DockerTag: python312-v1
 
 Outputs:
   ApiBaseUrl:
