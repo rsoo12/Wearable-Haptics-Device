@@ -37,7 +37,7 @@ class BLEConnection:
         rate = self.calc_packet_rate()
 
         if self.packet_queue is not None:
-            self.packet_queue.put_nowait((data, rate))
+            self.packet_queue.put_nowait((data, rate, time.time()))
         else:
             print(f"rate={rate:.1f} Hz  data={data}")
 
