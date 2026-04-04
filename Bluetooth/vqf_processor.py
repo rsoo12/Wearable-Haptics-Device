@@ -64,8 +64,8 @@ async def main():
 
     print("Connected!")
     packet_queue = asyncio.Queue()
-    gp  = GaitPhase(datarate=180)
-    fpa = FPA(is_right_foot=IS_RIGHT_FOOT, datarate=180)
+    gp  = GaitPhase(datarate=100)
+    fpa = FPA(is_right_foot=IS_RIGHT_FOOT, datarate=100)
 
     conn = BLEConnection(packet_queue=packet_queue)
 
