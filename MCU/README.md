@@ -38,6 +38,23 @@
 
 > **Note:** Pressing reset **twice** will erase the code from the MCU entirely.
 
+## Increasing BLE Packet Size to 24 Bytes
+
+The default BLE ATT MTU allows only 20 bytes of payload per packet. Since the IMU payload is 24 bytes, the Nordic UART Service library must be patched on the device.
+
+1. Open `CIRCUITPY/lib/adafruit_ble/services/nordic/__init__.py` (verify the path with `ls /Volumes/CIRCUITPY/lib/adafruit_ble/services/nordic/`)
+2. Find the TX characteristic definition and change `max_length=20` to `max_length=24`:
+   ```python
+   # before
+   _TXCharacteristic(..., max_length=20)
+
+   # after
+   _TXCharacteristic(..., max_length=24)
+   ```
+3. Save the file — this change persists on the device but will be overwritten if you reinstall the library via `circup`
+
+> **Note:** Re-running `circup install --auto` will reset this change. Re-apply the patch after any library update.
+
 ## Debugging
 
 - If saving fails with a `READ-ONLY` error, press the reset button on the XIAO once quickly
