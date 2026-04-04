@@ -41,6 +41,7 @@ while True:
         gyro_x, gyro_y, gyro_z = sensor.gyro
         payload = struct.pack('<6f', accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z)
         uart.write(payload)
+        time.sleep(0.01)  # 100 Hz
     else:
         led.value = True
 
