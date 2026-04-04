@@ -33,6 +33,8 @@ ble.start_advertising(advertisement)
 
 seq = 0
 while True:
+    # drv1.sequence[0] = adafruit_drv2605.Effect(1)
+    # drv1.play()
     if ble.connected:
         led.value = False 
         accel_x, accel_y, accel_z = sensor.acceleration
