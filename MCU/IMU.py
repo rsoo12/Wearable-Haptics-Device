@@ -1,9 +1,9 @@
-print("Hello World!")
 # #*****************************************************************************# 
 # # Sends bluetooth signal to LightBlue App on phone
 # #*****************************************************************************# 
 
 # # https://www.ubiqueiot.com/posts/xiao-circuitpy-ble
+
 from adafruit_ble import BLERadio
 from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
 from adafruit_ble.services.nordic import UARTService
@@ -16,38 +16,6 @@ import adafruit_drv2605
 import adafruit_tca9548a
 import struct
 
-# def startup_led_test(pin_name, active_low=True, hold_time=0.35):
-#     """Pulse one onboard LED if the named board pin exists."""
-#     pin = getattr(board, pin_name, None)
-#     if pin is None:
-#         print("LED pin not found:", pin_name)
-#         return
-
-#     led = None
-#     try:
-#         led = digitalio.DigitalInOut(pin)
-#         led.direction = digitalio.Direction.OUTPUT
-
-#         # XIAO onboard LEDs are typically active-low.
-#         on_value = False if active_low else True
-#         off_value = not on_value
-
-#         led.value = on_value
-#         time.sleep(hold_time)
-#         led.value = off_value
-#     except Exception as e:
-#         print("LED test failed for", pin_name, ":", e)
-#     finally:
-#         if led is not None:
-#             led.deinit()
-
-
-# # Continuous LED test loop: blue, then red.
-# while True:
-#     startup_led_test("LED_BLUE")
-#     startup_led_test("LED_RED")
-#     time.sleep(0.2)
-
 ble = BLERadio()
 uart = UARTService()
 advertisement = ProvideServicesAdvertisement(uart)
@@ -59,13 +27,8 @@ imupwr = digitalio.DigitalInOut(board.IMU_PWR)
 imupwr.direction = digitalio.Direction.OUTPUT
 imupwr.value = True
 time.sleep(0.1)
-# i2c = board.I2C()  
 imu_i2c = busio.I2C(board.IMU_SCL, board.IMU_SDA)
 sensor = LSM6DS3TRC(imu_i2c)
-
-# mux = adafruit_tca9548a.PCA9546A(i2c)
-# drv1 = adafruit_drv2605.DRV2605(mux[3])
-
 ble.start_advertising(advertisement)
 
 seq = 0
@@ -78,31 +41,6 @@ while True:
         gyro_x, gyro_y, gyro_z = sensor.gyro
         payload = struct.pack('<6f', accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z)
         uart.write(payload)
-        seq = (seq + 1) % 65536
-        waiting = uart.in_waiting
-        if waiting:
-            received = uart.read(waiting)
-            if received is not None:
-                try:
-                    received_str = received.decode("utf-8").strip()
-                except Exception as e:
-                    print(f"Error decoding UART data: {e}")
-                    received_str = None
-                print(f"Received: {received_str}")
-                
-                
-                # if (received_str == 'a'):
-                #   drv1.sequence[0] = adafruit_drv2605.Effect(52)
-                #   print("FIRST")
-                # elif (received_str == 'b'):
-                #   drv1.sequence[0] = adafruit_drv2605.Effect(1)
-                #   print("SECOND")
-                # else:
-                #   drv1.sequence[0] = adafruit_drv2605.Effect(41)
-                #   print("THIRD")
-                # drv1.play()
-                # time.sleep(0.5)
-        # time.sleep(0.5)
     else:
         led.value = True
 
