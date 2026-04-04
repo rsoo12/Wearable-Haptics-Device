@@ -6,7 +6,7 @@ import csv
 from FPA_algorithm import FPA
 from gaitphase import GaitPhase
 
-from bluetooth import find_device, BLEConnection
+from bluetooth import find_devices, BLEConnection
  
 IS_RIGHT_FOOT = True  
 
@@ -57,7 +57,7 @@ async def fpa_consumer(packet_queue: asyncio.Queue, gp: GaitPhase, fpa: FPA, wri
 
 
 async def main():
-    address = await find_device()
+    address = await find_devices()
     if not address:
         print("Device not found.")
         return
@@ -73,7 +73,7 @@ async def main():
         writer = csv.writer(f)
         writer.writerow(["time", "step num", "fpa"])
         await asyncio.gather(
-            conn.connect_and_read(address),
+            conn.connect_and_read(address[0]),
             fpa_consumer(packet_queue, gp, fpa, writer),
         )
 

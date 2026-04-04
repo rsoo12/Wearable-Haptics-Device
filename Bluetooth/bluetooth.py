@@ -8,17 +8,16 @@ CHAR_UUID_TX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"  # write to device
 CHAR_UUID_RX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"  # receive from device
 
 
-async def find_device(name_prefix=DEVICE_NAME):
+async def find_devices(name_prefix=DEVICE_NAME):
     print("Scanning for BLE devices...")
     devices = await BleakScanner.discover()
     print(f"Found {len(devices)} device(s):")
     for device in devices:
         print(f"  {device.name} ({device.address})")
-    for device in devices:
-        if device.name and device.name.startswith(name_prefix):
-            print(f"Matched target device: {device.name} ({device.address})")
-            return device.address
-    return None
+    matches = [d.address for d in devices if d.name and d.name.startswith(name_prefix)]
+    for addr in matches:
+        print(f"Matched target device: {addr}")
+    return matches
 
 
 class BLEConnection:
@@ -51,12 +50,12 @@ class BLEConnection:
 
 
 async def main():
-    address = await find_device()
-    if address:
-        print("Connected!")
-        await BLEConnection().connect_and_read(address)
-    else:
-        print("Device not found.")
+    addresses = await find_devices()
+    if not addresses:
+        print("No matching devices found.")
+        return
+    print(f"Connecting to {len(addresses)} device(s)...")
+    await asyncio.gather(*(BLEConnection().connect_and_read(addr) for addr in addresses))
 
 if __name__ == "__main__":
     asyncio.run(main())
