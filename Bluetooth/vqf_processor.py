@@ -1,6 +1,7 @@
 import asyncio
 import struct
 import math
+import csv
 
 from FPA_algorithm import FPA
 from gaitphase import GaitPhase
@@ -8,6 +9,8 @@ from gaitphase import GaitPhase
 from bluetooth import find_device, BLEConnection
  
 IS_RIGHT_FOOT = True  
+
+CSV_FILE = "fpa_log.csv"
 
 
 def parse_payload(payload: bytes):
@@ -19,9 +22,9 @@ def parse_payload(payload: bytes):
     return gyr, acc
 
 
-async def fpa_consumer(packet_queue: asyncio.Queue, gp: GaitPhase, fpa: FPA):
+async def fpa_consumer(packet_queue: asyncio.Queue, gp: GaitPhase, fpa: FPA, writer: csv.writer):
     while True:
-        payload, rate = await packet_queue.get()
+        payload, rate, ts = await packet_queue.get()
 
         parsed = parse_payload(payload)
         if parsed is None:
@@ -50,6 +53,7 @@ async def fpa_consumer(packet_queue: asyncio.Queue, gp: GaitPhase, fpa: FPA):
         #RIGHT NOW WE PRINT. BUT LATER, WE RUN SCRIPT THAT SENDS VIB FEEDBACK COMMANDS TO SHANK COMPONENT
         if gp.in_feedback_window:
             print(f"Step {gp.step_count}: FPA = {fpa.FPA_this_step:.1f} deg  rate={rate:.1f} Hz")
+            writer.writerow([ts, gp.step_count, f"{fpa.FPA_this_step:.1f}"])
 
 
 async def main():
@@ -65,10 +69,13 @@ async def main():
 
     conn = BLEConnection(packet_queue=packet_queue)
 
-    await asyncio.gather(
-        conn.connect_and_read(address),
-        fpa_consumer(packet_queue, gp, fpa),
-    )
+    with open(CSV_FILE, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["time", "step num", "fpa"])
+        await asyncio.gather(
+            conn.connect_and_read(address),
+            fpa_consumer(packet_queue, gp, fpa, writer),
+        )
 
 if __name__ == "__main__":
     asyncio.run(main())
