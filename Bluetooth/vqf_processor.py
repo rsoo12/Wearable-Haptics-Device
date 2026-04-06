@@ -2,6 +2,7 @@ import asyncio
 import struct
 import math
 import csv
+from datetime import datetime
 
 from FPA_algorithm import FPA
 from gaitphase import GaitPhase
@@ -10,7 +11,7 @@ from bluetooth import find_devices, BLEConnection
  
 IS_RIGHT_FOOT = True  
 
-CSV_FILE = "fpa_log.csv"
+CSV_FILE = f"output/fpa_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
 
 def parse_payload(payload: bytes):

@@ -1,1 +1,2 @@
-fpa_log.csv
+output/*
+!output/.gitkeep
