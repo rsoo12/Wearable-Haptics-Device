@@ -54,6 +54,8 @@ async def fpa_consumer(packet_queue: asyncio.Queue, gp: GaitPhase, fpa: FPA, wri
         if gp.in_feedback_window:
             print(f"Step {gp.step_count}: FPA = {fpa.FPA_this_step:.1f} deg  rate={rate:.1f} Hz")
             writer.writerow([ts, gp.step_count, f"{fpa.FPA_this_step:.1f}"])
+        else:
+            writer.writerow([ts, "", ""])
 
 
 async def main():
