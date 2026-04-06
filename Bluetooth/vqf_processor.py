@@ -2,6 +2,7 @@ import asyncio
 import struct
 import math
 import csv
+import os
 from datetime import datetime
 
 from FPA_algorithm import FPA
@@ -11,6 +12,7 @@ from bluetooth import find_devices, BLEConnection
  
 IS_RIGHT_FOOT = True  
 
+os.makedirs("output", exist_ok=True)
 CSV_FILE = f"output/fpa_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
 
 
