@@ -47,8 +47,18 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="fpa"
+        options={{
+          title: 'FPA',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol size={28} name="chart.line.uptrend.xyaxis" color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="backend"
         options={{
+          href: null,
           title: 'Backend',
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="cloud" color={color} />
