@@ -55,11 +55,14 @@ async def fpa_consumer(packet_queue: asyncio.Queue, gp: GaitPhase, fpa: FPA, wri
         fpa.update_FPA(sensor_data, gp.gaitphase_old, gp.gaitphase)
 
         #RIGHT NOW WE PRINT. BUT LATER, WE RUN SCRIPT THAT SENDS VIB FEEDBACK COMMANDS TO SHANK COMPONENT
+        row_acc = [f"{acc[0]:.4f}", f"{acc[1]:.4f}", f"{acc[2]:.4f}"]
+        row_gyr = [f"{gyr[0]:.4f}", f"{gyr[1]:.4f}", f"{gyr[2]:.4f}"]
+
         if gp.in_feedback_window:
             print(f"Step {gp.step_count}: FPA = {fpa.FPA_this_step:.1f} deg  rate={rate:.1f} Hz")
-            writer.writerow([ts, gp.step_count, f"{fpa.FPA_this_step:.1f}"])
+            writer.writerow([ts, gp.step_count, f"{fpa.FPA_this_step:.1f}"] + row_acc + row_gyr)
         else:
-            writer.writerow([ts, "", ""])
+            writer.writerow([ts, "", ""] + row_acc + row_gyr)
 
 
 async def main():
@@ -77,7 +80,7 @@ async def main():
 
     with open(CSV_FILE, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["time", "step num", "fpa"])
+        writer.writerow(["time", "step num", "fpa", "ax (m/s2)", "ay (m/s2)", "az (m/s2)", "gx (rad/s)", "gy (rad/s)", "gz (rad/s)"])
         await asyncio.gather(
             conn.connect_and_read(address[0]),
             fpa_consumer(packet_queue, gp, fpa, writer),
