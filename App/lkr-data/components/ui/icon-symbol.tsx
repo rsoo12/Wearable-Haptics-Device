@@ -21,6 +21,7 @@ const MAPPING = {
   'figure.walk': 'directions-walk',
   'clock.arrow.circlepath': 'history',
   'chart.bar.xaxis': 'insights',
+  'chart.line.uptrend.xyaxis': 'trending-up',
 } as IconMapping;
 
 /**

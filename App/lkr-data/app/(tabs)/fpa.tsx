@@ -1,22 +1,18 @@
-/**
- * AWS Lambda BLE pipeline (Backend tab). The tab bar entry is hidden (`href: null` in _layout);
- * this file is kept for the cloud path. Use the **FPA** tab for on-device step/FPA processing.
- */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
-import { BleManager, Device, Service, Subscription } from 'react-native-ble-plx';
+import { Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { BleManager, Device, Service } from 'react-native-ble-plx';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useIphone13ContentFrame } from '@/hooks/use-iphone13-content-frame';
-import { processBlePacket } from '@/lib/api';
+import { useWearableFpaPipeline } from '@/hooks/use-wearable-fpa-pipeline';
 
 const DEVICE_NAME_PREFIX = 'CIRCUITPY';
 const CHAR_UUID_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
 
-export default function BackendScreen() {
+export default function FpaScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const { scrollContentStyle } = useIphone13ContentFrame({ includeTabBarInset: true });
@@ -25,37 +21,19 @@ export default function BackendScreen() {
   const [status, setStatus] = useState<'idle' | 'scanning' | 'connected' | 'error'>('idle');
   const [error, setError] = useState<string>('');
   const [deviceLabel, setDeviceLabel] = useState<string>('Not connected');
-  const [step, setStep] = useState<number>(0);
-  const [fpaDeg, setFpaDeg] = useState<number>(0);
-  const [rateHz, setRateHz] = useState<number>(0);
-  const [printMessage, setPrintMessage] = useState<string>('Waiting for feedback window...');
 
   const managerRef = useRef<BleManager | null>(null);
-  const notifySubRef = useRef<Subscription | null>(null);
   const connectedRef = useRef<Device | null>(null);
 
-  const packetQueueRef = useRef<{ payload: string; rate: number }[]>([]);
-  const processingRef = useRef(false);
-  const timestampsRef = useRef<number[]>([]);
-
-  const appendTimestamp = () => {
-    const now = Date.now() / 1000;
-    const next = [...timestampsRef.current, now];
-    if (next.length > 50) next.shift();
-    timestampsRef.current = next;
-    if (next.length < 2) return 0;
-    const elapsed = next[next.length - 1] - next[0];
-    if (elapsed <= 0) return 0;
-    return (next.length - 1) / elapsed;
-  };
+  const { latest, start: startPipeline, stop: stopPipeline, reset: resetPipeline } =
+    useWearableFpaPipeline({ datarate: 180, isRightFoot: true });
 
   const stopScan = () => {
     managerRef.current?.stopDeviceScan();
   };
 
   const disconnect = async () => {
-    notifySubRef.current?.remove();
-    notifySubRef.current = null;
+    stopPipeline();
     stopScan();
     const manager = managerRef.current;
     const connected = connectedRef.current;
@@ -63,34 +41,11 @@ export default function BackendScreen() {
       try {
         await manager.cancelDeviceConnection(connected.id);
       } catch {
-        // no-op: disconnect errors are non-fatal during teardown
+        // non-fatal during teardown
       }
     }
     connectedRef.current = null;
     setDeviceLabel('Not connected');
-  };
-
-  const drainQueue = async () => {
-    if (processingRef.current) return;
-    processingRef.current = true;
-    try {
-      while (packetQueueRef.current.length > 0) {
-        const next = packetQueueRef.current.shift();
-        if (!next) break;
-        const response = await processBlePacket(next.payload, next.rate);
-        setStep(response.step);
-        setFpaDeg(response.fpa_deg);
-        setRateHz(response.rate_hz);
-        if (response.print_message) {
-          setPrintMessage(response.print_message);
-        }
-      }
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
-      setStatus('error');
-    } finally {
-      processingRef.current = false;
-    }
   };
 
   const connectAndStart = async (device: Device) => {
@@ -118,25 +73,11 @@ export default function BackendScreen() {
       setStatus('connected');
       setError('');
 
-      notifySubRef.current?.remove();
-      notifySubRef.current = manager.monitorCharacteristicForDevice(
-        connected.id,
-        rxServiceUUID,
-        CHAR_UUID_RX,
-        (notifyError, characteristic) => {
-          if (notifyError) {
-            setError(notifyError.message);
-            setStatus('error');
-            return;
-          }
-          if (!characteristic?.value) return;
-          const rate = appendTimestamp();
-          packetQueueRef.current.push({ payload: characteristic.value, rate });
-          void drainQueue();
-        },
-      );
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+      resetPipeline();
+      startPipeline(connected);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
       setStatus('error');
     }
   };
@@ -161,6 +102,23 @@ export default function BackendScreen() {
     });
   };
 
+  const onRescan = () => {
+    void (async () => {
+      await disconnect();
+      startAutoScan();
+    })();
+  };
+
+  const onDisconnectPress = () => {
+    void (async () => {
+      await disconnect();
+      resetPipeline();
+      setStatus('idle');
+    })();
+  };
+
+  const canDisconnect = status === 'scanning' || connectedRef.current != null;
+
   useEffect(() => {
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
       setError('Bluetooth is only available on a physical iOS or Android device.');
@@ -179,17 +137,22 @@ export default function BackendScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const feedbackLine = latest?.inFeedbackWindow
+    ? `Feedback window: FPA ≈ ${latest.fpaThisStepDeg.toFixed(1)}°`
+    : 'Outside feedback window (middle → late stance triggers haptics context).';
+
   return (
     <ThemedView style={stylesThemed.container}>
       <ScrollView
         contentContainerStyle={[stylesThemed.content, scrollContentStyle]}
         keyboardShouldPersistTaps="handled">
         <ThemedText type="title" style={stylesThemed.title}>
-          Backend Pipeline
+          FPA
         </ThemedText>
 
         <ThemedText style={stylesThemed.muted}>
-          Auto-scans for BLE devices and streams packets into AWS Lambda VQF processing.
+          On-device step count and foot progression angle — same pipeline as Bluetooth/vqf_processor.py
+          (no cloud).
         </ThemedText>
 
         <ThemedView style={stylesThemed.result}>
@@ -198,16 +161,32 @@ export default function BackendScreen() {
           <ThemedText style={stylesThemed.resultText}>Device: {deviceLabel}</ThemedText>
         </ThemedView>
 
-        <TouchableOpacity style={stylesThemed.button} onPress={startAutoScan} activeOpacity={0.7}>
-          <ThemedText style={stylesThemed.buttonText}>Rescan & reconnect</ThemedText>
-        </TouchableOpacity>
+        <View style={stylesThemed.buttonRow}>
+          <TouchableOpacity style={stylesThemed.button} onPress={onRescan} activeOpacity={0.7}>
+            <ThemedText style={stylesThemed.buttonText}>Connect</ThemedText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[stylesThemed.buttonDanger, !canDisconnect && stylesThemed.buttonDisabled]}
+            onPress={onDisconnectPress}
+            disabled={!canDisconnect}
+            activeOpacity={0.7}>
+            <ThemedText style={stylesThemed.buttonDangerText}>Disconnect</ThemedText>
+          </TouchableOpacity>
+        </View>
 
         <ThemedView style={stylesThemed.result}>
-          <ThemedText type="subtitle">Live Output</ThemedText>
-          <ThemedText style={stylesThemed.resultText}>Step: {step}</ThemedText>
-          <ThemedText style={stylesThemed.resultText}>FPA: {fpaDeg.toFixed(1)} deg</ThemedText>
-          <ThemedText style={stylesThemed.resultText}>Rate: {rateHz.toFixed(1)} Hz</ThemedText>
-          <ThemedText style={stylesThemed.resultText}>{printMessage}</ThemedText>
+          <ThemedText type="subtitle">Live gait / FPA</ThemedText>
+          <ThemedText style={stylesThemed.resultText}>
+            Step count: {latest?.stepCount ?? '—'}
+          </ThemedText>
+          <ThemedText style={stylesThemed.resultText}>
+            FPA (this step):{' '}
+            {latest != null ? `${latest.fpaThisStepDeg.toFixed(1)}°` : '—'}
+          </ThemedText>
+          <ThemedText style={stylesThemed.resultText}>
+            Stream rate: {latest != null ? `${latest.rateHz.toFixed(1)} Hz` : '—'}
+          </ThemedText>
+          <ThemedText style={stylesThemed.resultText}>{feedbackLine}</ThemedText>
         </ThemedView>
 
         {error ? (
@@ -227,16 +206,30 @@ function createStyles(theme: (typeof Colors)['light']) {
     content: { gap: 16 },
     title: { marginBottom: 2 },
     muted: { color: theme.muted, fontSize: 13 },
+    buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 6 },
     button: {
-      paddingHorizontal: 20,
+      flexGrow: 1,
+      flexBasis: '45%',
+      paddingHorizontal: 16,
       minHeight: 44,
       borderRadius: 10,
       backgroundColor: theme.buttonPrimary,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: 6,
     },
-    buttonText: { color: theme.buttonOnPrimary, fontWeight: '600', fontSize: 16 },
+    buttonText: { color: theme.buttonOnPrimary, fontWeight: '600', fontSize: 15 },
+    buttonDanger: {
+      flexGrow: 1,
+      flexBasis: '45%',
+      paddingHorizontal: 16,
+      minHeight: 44,
+      borderRadius: 10,
+      backgroundColor: theme.buttonDestructive,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    buttonDangerText: { color: theme.buttonOnPrimary, fontWeight: '600', fontSize: 15 },
+    buttonDisabled: { opacity: 0.45 },
     result: { gap: 8, paddingTop: 10 },
     resultText: { fontSize: 15, color: theme.text },
     errorText: { fontSize: 13, color: theme.buttonDestructive },
