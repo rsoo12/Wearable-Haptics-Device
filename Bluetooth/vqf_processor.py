@@ -11,6 +11,7 @@ from gaitphase import GaitPhase
 from bluetooth import find_devices, BLEConnection
  
 IS_RIGHT_FOOT = True  
+DATA_RATE = 100  # Hz
 
 os.makedirs("output", exist_ok=True)
 CSV_FILE = f"output/fpa_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
@@ -69,8 +70,8 @@ async def main():
 
     print("Connected!")
     packet_queue = asyncio.Queue()
-    gp  = GaitPhase(datarate=100)
-    fpa = FPA(is_right_foot=IS_RIGHT_FOOT, datarate=100)
+    gp  = GaitPhase(datarate=DATA_RATE)
+    fpa = FPA(is_right_foot=IS_RIGHT_FOOT, datarate=DATA_RATE)
 
     conn = BLEConnection(packet_queue=packet_queue)
 
