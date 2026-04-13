@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { BleManager, Device } from 'react-native-ble-plx';
+import { BleManager, Device } from 'react-native-ble-plx';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -46,12 +47,26 @@ export default function FpaScreen() {
           }
         }),
       );
+    if (manager && connectedRef.current.length > 0) {
+      const toClose = [...connectedRef.current];
+      await Promise.allSettled(
+        toClose.map(async connected => {
+          try {
+            await manager.cancelDeviceConnection(connected.id);
+          } catch {
+            // non-fatal during teardown
+          }
+        }),
+      );
     }
+    connectedRef.current = [];
+    setConnectedCount(0);
     connectedRef.current = [];
     setConnectedCount(0);
     setDeviceLabel('Not connected');
   };
 
+  const connectAndStart = async (devices: Device[]) => {
   const connectAndStart = async (devices: Device[]) => {
     const manager = managerRef.current;
     if (!manager) return;
@@ -67,13 +82,21 @@ export default function FpaScreen() {
       setDeviceLabel(
         connected.map(item => `${item.device.name ?? 'Unnamed'} (${item.device.id})`).join(', '),
       );
+      const connected = await connectNordicDevices(manager, devices);
+      if (connected.length === 0) {
+        throw new Error('Found matching devices, but could not connect to any of them.');
+      }
+
+      connectedRef.current = connected.map(item => item.device);
+      setConnectedCount(connected.length);
+      setDeviceLabel(
+        connected.map(item => `${item.device.name ?? 'Unnamed'} (${item.device.id})`).join(', '),
+      );
       setStatus('connected');
       setError('');
 
       resetPipeline();
-      connected.forEach(item => {
-        startPipeline(item.device);
-      });
+      await Promise.all(connected.map(item => startPipeline(item.device)));
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
@@ -82,8 +105,22 @@ export default function FpaScreen() {
   };
 
   const startAutoScan = async () => {
+  const startAutoScan = async () => {
     const manager = managerRef.current;
     if (!manager) return;
+    try {
+      setStatus('scanning');
+      setError('');
+      stopScan();
+
+      const matches = await findNordicDevices(manager, {
+        namePrefix: DEVICE_NAME_PREFIX,
+        scanMs: 5000,
+      });
+      if (matches.length === 0) {
+        setConnectedCount(0);
+        setDeviceLabel('Not connected');
+        setError(`No BLE devices found with name prefix "${DEVICE_NAME_PREFIX}".`);
     try {
       setStatus('scanning');
       setError('');
@@ -107,11 +144,19 @@ export default function FpaScreen() {
       setError(msg);
       setStatus('error');
     }
+
+      await connectAndStart(matches);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      setStatus('error');
+    }
   };
 
   const onRescan = () => {
     void (async () => {
       await disconnect();
+      await startAutoScan();
       await startAutoScan();
     })();
   };
@@ -124,6 +169,7 @@ export default function FpaScreen() {
     })();
   };
 
+  const canDisconnect = status === 'scanning' || connectedRef.current.length > 0;
   const canDisconnect = status === 'scanning' || connectedRef.current.length > 0;
 
   useEffect(() => {
@@ -184,6 +230,9 @@ export default function FpaScreen() {
 
         <ThemedView style={stylesThemed.result}>
           <ThemedText type="subtitle">Live gait / FPA</ThemedText>
+          <ThemedText style={stylesThemed.resultText}>
+            Global run #: {latest?.globalRunNumber ?? '—'}
+          </ThemedText>
           <ThemedText style={stylesThemed.resultText}>
             Step count: {latest?.stepCount ?? '—'}
           </ThemedText>
