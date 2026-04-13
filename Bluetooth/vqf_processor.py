@@ -12,6 +12,7 @@ from bluetooth import find_devices, BLEConnection
  
 IS_RIGHT_FOOT = True  
 DATA_RATE = 100  # Hz
+CALIBRATION = False
 
 os.makedirs("output", exist_ok=True)
 CSV_FILE = f"output/fpa_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
@@ -26,7 +27,14 @@ def parse_payload(payload: bytes):
     return gyr, acc
 
 
+CALIBRATION_DURATION = 30  # seconds
+
+
 async def fpa_consumer(packet_queue: asyncio.Queue, gp: GaitPhase, fpa: FPA, writer: csv.writer):
+    start_time = asyncio.get_event_loop().time()
+    calibration_fpas = []
+    seen_steps = set(1, 2, 3, 4, 5, 6, 7) # start seen steps with ignoring first 7 steps 
+
     while True:
         payload, rate, ts = await packet_queue.get()
 
@@ -58,11 +66,31 @@ async def fpa_consumer(packet_queue: asyncio.Queue, gp: GaitPhase, fpa: FPA, wri
         row_acc = [f"{acc[0]:.4f}", f"{acc[1]:.4f}", f"{acc[2]:.4f}"]
         row_gyr = [f"{gyr[0]:.4f}", f"{gyr[1]:.4f}", f"{gyr[2]:.4f}"]
 
-        if gp.in_feedback_window:
-            print(f"Step {gp.step_count}: FPA = {fpa.FPA_this_step:.1f} deg  rate={rate:.1f} Hz")
-            writer.writerow([ts, gp.step_count, f"{fpa.FPA_this_step:.1f}"] + row_acc + row_gyr)
+        if CALIBRATION:
+            elapsed = asyncio.get_event_loop().time() - start_time
+
+            if gp.in_feedback_window and gp.step_count not in seen_steps:
+                seen_steps.add(gp.step_count)
+                calibration_fpas.append(fpa.FPA_this_step)
+                print(f"[Calibration] Step {gp.step_count}: FPA = {fpa.FPA_this_step:.1f} deg  elapsed={elapsed:.1f}s")
+
+            if elapsed >= CALIBRATION_DURATION:
+                if calibration_fpas:
+                    avg_fpa = sum(calibration_fpas) / len(calibration_fpas)
+                    with open("base_fpa.csv", "w", newline="") as cal_f:
+                        cal_writer = csv.writer(cal_f)
+                        cal_writer.writerow(["base_fpa"])
+                        cal_writer.writerow([f"{avg_fpa:.4f}"])
+                    print(f"Calibration complete. Average FPA = {avg_fpa:.2f} deg ({len(calibration_fpas)} steps) written to base_fpa.csv")
+                else:
+                    print("Calibration complete but no FPA values were collected.")
+                return
         else:
-            writer.writerow([ts, "", ""] + row_acc + row_gyr)
+            if gp.in_feedback_window:
+                print(f"Step {gp.step_count}: FPA = {fpa.FPA_this_step:.1f} deg  rate={rate:.1f} Hz")
+                writer.writerow([ts, gp.step_count, f"{fpa.FPA_this_step:.1f}"] + row_acc + row_gyr)
+            else:
+                writer.writerow([ts, "", ""] + row_acc + row_gyr)
 
 
 async def main():
