@@ -2,7 +2,7 @@
 # # Sends bluetooth signal to LightBlue App on phone
 # #*****************************************************************************# 
 
-# # https://www.ubiqueiot.com/posts/xiao-circuitpy-ble
+# https://www.ubiqueiot.com/posts/xiao-circuitpy-ble
 
 from adafruit_ble import BLERadio
 from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
@@ -41,7 +41,7 @@ while True:
         gyro_x, gyro_y, gyro_z = sensor.gyro
         payload = struct.pack('<6f', accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z)
         uart.write(payload)
-        time.sleep(0.01)  # 100 Hz
+        time.sleep(1/160)  # 140 Hz
     else:
         led.value = True
 
@@ -152,7 +152,48 @@ while True:
 # drv.sequence[2] = adafruit_drv2605.Effect(47)
 # drv.sequence[3] = adafruit_drv2605.Effect(0)
 # drv.play()
-#ctrl-d runs the code LOL 
+#ctrl-d runs the code LOL
+
+
+# *****************************************************************************#
+# Monitors battery charging status and voltage on the XIAO nRF52840 Sense.
+# The onboard BQ25100 charger charges automatically when USB is connected.
+# CHARGE_STATUS is active-low: LOW = charging, HIGH = charge complete / no battery.
+# *****************************************************************************#
+
+# import time
+# import board
+# import digitalio
+# import analogio
+
+# # Charging status pin (active low: LOW = charging)
+# charge_status = digitalio.DigitalInOut(board.CHARGE_STATUS)
+# charge_status.direction = digitalio.Direction.INPUT
+# charge_status.pull = digitalio.Pull.UP
+
+
+# # READ_BATT_ENABLE is active-low: LOW enables the voltage divider
+# read_batt_enable = digitalio.DigitalInOut(board.READ_BATT_ENABLE)
+# read_batt_enable.direction = digitalio.Direction.OUTPUT
+# read_batt_enable.value = True  # keep disabled by default
+
+# vbat_pin = analogio.AnalogIn(board.VBATT)
+
+# def read_battery_voltage():
+#     read_batt_enable.value = False  # enable divider (active low)
+#     time.sleep(0.01)  # allow divider to settle
+#     voltage = (vbat_pin.value / 65535) * 3.3 * 3  # 3x: XIAO nRF52840 divider is ~1/3
+#     read_batt_enable.value = True  # disable to save power
+#     return voltage
+
+# while True:
+#     is_charging = not charge_status.value  # active low
+#     voltage = read_battery_voltage()
+#     percent = max(0, min(100, (voltage - 3.2) / (4.2 - 3.2) * 100))
+#     print(f"Battery: {voltage:.2f}V  ~{percent:.0f}%  {'Charging' if is_charging else 'Not charging'}")
+#     time.sleep(1)
+
+
 
 
 

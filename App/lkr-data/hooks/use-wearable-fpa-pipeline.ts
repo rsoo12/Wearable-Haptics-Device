@@ -28,18 +28,28 @@ type Options = {
  * `Bluetooth/vqf_processor.py` on each notification (on-device, no backend).
  */
 export function useWearableFpaPipeline(options?: Options) {
-  const pipelineRef = useRef(new FpaPipeline(options));
+  const pipelinesRef = useRef(new Map<string, FpaPipeline>());
+  const subsRef = useRef(new Map<string, Subscription>());
   const [latest, setLatest] = useState<FpaPipelineOutput | null>(null);
-  const subRef = useRef<Subscription | null>(null);
 
   const stop = useCallback(() => {
-    subRef.current?.remove();
-    subRef.current = null;
+    for (const sub of subsRef.current.values()) {
+      sub.remove();
+    }
+    subsRef.current.clear();
   }, []);
 
   const start = useCallback(
     (device: Device) => {
-      stop();
+      const existingSub = subsRef.current.get(device.id);
+      existingSub?.remove();
+
+      let pipeline = pipelinesRef.current.get(device.id);
+      if (!pipeline) {
+        pipeline = new FpaPipeline(options);
+        pipelinesRef.current.set(device.id, pipeline);
+      }
+
       const sub = device.monitorCharacteristicForService(
         NORDIC_UART_SERVICE_UUID,
         NORDIC_UART_RX_CHAR_UUID,
@@ -47,7 +57,9 @@ export function useWearableFpaPipeline(options?: Options) {
           if (err) {
             return;
           }
-          const out = pipelineRef.current.processPayloadBase64(
+          const currentPipeline = pipelinesRef.current.get(device.id);
+          if (!currentPipeline) return;
+          const out = currentPipeline.processPayloadBase64(
             characteristic?.value,
             monoSeconds(),
           );
@@ -56,13 +68,15 @@ export function useWearableFpaPipeline(options?: Options) {
           }
         },
       );
-      subRef.current = sub;
+      subsRef.current.set(device.id, sub);
     },
-    [stop],
+    [options],
   );
 
   const reset = useCallback(() => {
-    pipelineRef.current.reset();
+    for (const pipeline of pipelinesRef.current.values()) {
+      pipeline.reset();
+    }
     setLatest(null);
   }, []);
 
