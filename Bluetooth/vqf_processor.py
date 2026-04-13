@@ -12,7 +12,7 @@ from bluetooth import find_devices, BLEConnection
  
 IS_RIGHT_FOOT = True  
 DATA_RATE = 100  # Hz
-CALIBRATION = False
+CALIBRATION = True
 
 os.makedirs("output", exist_ok=True)
 CSV_FILE = f"output/fpa_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
@@ -27,13 +27,13 @@ def parse_payload(payload: bytes):
     return gyr, acc
 
 
-CALIBRATION_DURATION = 30  # seconds
+CALIBRATION_DURATION = 60  # seconds
 
 
 async def fpa_consumer(packet_queue: asyncio.Queue, gp: GaitPhase, fpa: FPA, writer: csv.writer):
     start_time = asyncio.get_event_loop().time()
     calibration_fpas = []
-    seen_steps = set(1, 2, 3, 4, 5, 6, 7) # start seen steps with ignoring first 7 steps 
+    seen_steps = {1, 2, 3, 4, 5, 6, 7} # start seen steps with ignoring first 7 steps 
 
     while True:
         payload, rate, ts = await packet_queue.get()
