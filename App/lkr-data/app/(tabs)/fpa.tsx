@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { BleManager, Device, Service } from 'react-native-ble-plx';
+import { BleManager, Device } from 'react-native-ble-plx';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -8,9 +8,7 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useIphone13ContentFrame } from '@/hooks/use-iphone13-content-frame';
 import { useWearableFpaPipeline } from '@/hooks/use-wearable-fpa-pipeline';
-
-const DEVICE_NAME_PREFIX = 'CIRCUITPY';
-const CHAR_UUID_RX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+import { connectNordicDevices, DEVICE_NAME_PREFIX, findNordicDevices } from '@/lib/wearable';
 
 export default function FpaScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -21,9 +19,10 @@ export default function FpaScreen() {
   const [status, setStatus] = useState<'idle' | 'scanning' | 'connected' | 'error'>('idle');
   const [error, setError] = useState<string>('');
   const [deviceLabel, setDeviceLabel] = useState<string>('Not connected');
+  const [connectedCount, setConnectedCount] = useState<number>(0);
 
   const managerRef = useRef<BleManager | null>(null);
-  const connectedRef = useRef<Device | null>(null);
+  const connectedRef = useRef<Device[]>([]);
 
   const { latest, start: startPipeline, stop: stopPipeline, reset: resetPipeline } =
     useWearableFpaPipeline({ datarate: 180, isRightFoot: true });
@@ -36,45 +35,45 @@ export default function FpaScreen() {
     stopPipeline();
     stopScan();
     const manager = managerRef.current;
-    const connected = connectedRef.current;
-    if (manager && connected) {
-      try {
-        await manager.cancelDeviceConnection(connected.id);
-      } catch {
-        // non-fatal during teardown
-      }
+    if (manager && connectedRef.current.length > 0) {
+      const toClose = [...connectedRef.current];
+      await Promise.allSettled(
+        toClose.map(async connected => {
+          try {
+            await manager.cancelDeviceConnection(connected.id);
+          } catch {
+            // non-fatal during teardown
+          }
+        }),
+      );
     }
-    connectedRef.current = null;
+    connectedRef.current = [];
+    setConnectedCount(0);
     setDeviceLabel('Not connected');
   };
 
-  const connectAndStart = async (device: Device) => {
+  const connectAndStart = async (devices: Device[]) => {
     const manager = managerRef.current;
     if (!manager) return;
     try {
       stopScan();
-      const connected = await manager.connectToDevice(device.id, { timeout: 10000 });
-      await connected.discoverAllServicesAndCharacteristics();
-      const services: Service[] = await connected.services();
-      let rxServiceUUID = '';
-      for (const service of services) {
-        const characteristics = await service.characteristics();
-        const hasRx = characteristics.some(char => char.uuid.toLowerCase() === CHAR_UUID_RX);
-        if (hasRx) {
-          rxServiceUUID = service.uuid;
-          break;
-        }
+      const connected = await connectNordicDevices(manager, devices);
+      if (connected.length === 0) {
+        throw new Error('Found matching devices, but could not connect to any of them.');
       }
-      if (!rxServiceUUID) {
-        throw new Error(`Could not find RX characteristic ${CHAR_UUID_RX} on connected device.`);
-      }
-      connectedRef.current = connected;
-      setDeviceLabel(`${connected.name ?? 'Unnamed'} (${connected.id})`);
+
+      connectedRef.current = connected.map(item => item.device);
+      setConnectedCount(connected.length);
+      setDeviceLabel(
+        connected.map(item => `${item.device.name ?? 'Unnamed'} (${item.device.id})`).join(', '),
+      );
       setStatus('connected');
       setError('');
 
       resetPipeline();
-      startPipeline(connected);
+      connected.forEach(item => {
+        startPipeline(item.device);
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
@@ -82,30 +81,38 @@ export default function FpaScreen() {
     }
   };
 
-  const startAutoScan = () => {
+  const startAutoScan = async () => {
     const manager = managerRef.current;
     if (!manager) return;
-    setStatus('scanning');
-    setError('');
+    try {
+      setStatus('scanning');
+      setError('');
+      stopScan();
 
-    stopScan();
-    manager.startDeviceScan(null, null, (scanError, device) => {
-      if (scanError) {
-        setError(scanError.message);
+      const matches = await findNordicDevices(manager, {
+        namePrefix: DEVICE_NAME_PREFIX,
+        scanMs: 5000,
+      });
+      if (matches.length === 0) {
+        setConnectedCount(0);
+        setDeviceLabel('Not connected');
+        setError(`No BLE devices found with name prefix "${DEVICE_NAME_PREFIX}".`);
         setStatus('error');
-        stopScan();
         return;
       }
-      if (!device?.name) return;
-      if (!device.name.startsWith(DEVICE_NAME_PREFIX)) return;
-      void connectAndStart(device);
-    });
+
+      await connectAndStart(matches);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+      setStatus('error');
+    }
   };
 
   const onRescan = () => {
     void (async () => {
       await disconnect();
-      startAutoScan();
+      await startAutoScan();
     })();
   };
 
@@ -117,7 +124,7 @@ export default function FpaScreen() {
     })();
   };
 
-  const canDisconnect = status === 'scanning' || connectedRef.current != null;
+  const canDisconnect = status === 'scanning' || connectedRef.current.length > 0;
 
   useEffect(() => {
     if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
@@ -127,7 +134,7 @@ export default function FpaScreen() {
     }
     const manager = new BleManager();
     managerRef.current = manager;
-    startAutoScan();
+    void startAutoScan();
 
     return () => {
       void disconnect();
@@ -158,6 +165,7 @@ export default function FpaScreen() {
         <ThemedView style={stylesThemed.result}>
           <ThemedText type="subtitle">Connection</ThemedText>
           <ThemedText style={stylesThemed.resultText}>Status: {status}</ThemedText>
+          <ThemedText style={stylesThemed.resultText}>Connected devices: {connectedCount}</ThemedText>
           <ThemedText style={stylesThemed.resultText}>Device: {deviceLabel}</ThemedText>
         </ThemedView>
 
