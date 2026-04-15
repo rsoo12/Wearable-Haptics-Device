@@ -36,7 +36,7 @@ while True:
     # drv1.sequence[0] = adafruit_drv2605.Effect(1)
     # drv1.play()
     if ble.connected:
-        led.value = False 
+        led.value = False
         accel_x, accel_y, accel_z = sensor.acceleration
         gyro_x, gyro_y, gyro_z = sensor.gyro
         payload = struct.pack('<6f', accel_x, accel_y, accel_z, gyro_x, gyro_y, gyro_z)
@@ -44,6 +44,8 @@ while True:
         time.sleep(1/160)  # 140 Hz
     else:
         led.value = True
+        if not ble.advertising:
+            ble.start_advertising(advertisement)
 
 
 #*****************************************************************************# 

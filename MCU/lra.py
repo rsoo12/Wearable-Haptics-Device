@@ -69,6 +69,8 @@ while True:
                     print(f"Error parsing command '{received_str}': {e}")
     else:
         led.value = True
+        if not ble.advertising:
+            ble.start_advertising(advertisement)
 
 
 #*****************************************************************************# 
