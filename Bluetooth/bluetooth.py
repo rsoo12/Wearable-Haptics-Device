@@ -14,10 +14,13 @@ async def find_devices(name_prefix=DEVICE_NAME):
     print(f"Found {len(devices)} device(s):")
     for device in devices:
         print(f"  {device.name} ({device.address})")
-    matches = [d.address for d in devices if d.name and d.name.startswith(name_prefix)]
-    for addr in matches:
-        print(f"Matched target device: {addr}")
+    matches = [(d.address, d.name) for d in devices if d.name and d.name.startswith(name_prefix)]
+    for addr, name in matches:
+        print(f"Matched target device: {addr, name}")
     return matches
+
+#CIRCUITPY9391
+#CIRCUITPY4f33 -> imu
 
 
 class BLEConnection:
@@ -48,6 +51,16 @@ class BLEConnection:
             while True:
                 await asyncio.sleep(1)
 
+    async def connect_and_write(self, address, cmd_queue: asyncio.Queue):
+        async with BleakClient(address) as client:
+            await asyncio.sleep(0.15)
+            print(f"Connected to LRA MCU ({address}), ready to send commands.")
+            while True:
+                cmd = await cmd_queue.get()
+                await client.write_gatt_char(CHAR_UUID_TX, cmd.encode(), response=False)
+                print(f"[LRA Feedback] Sent cmd='{cmd}' to {address}")
+
+
 
 async def main():
     addresses = await find_devices()
@@ -55,7 +68,7 @@ async def main():
         print("No matching devices found.")
         return
     print(f"Connecting to {len(addresses)} device(s)...")
-    await asyncio.gather(*(BLEConnection().connect_and_read(addr) for addr in addresses))
+    await asyncio.gather(*(BLEConnection().connect_and_read(addr) for addr, name in addresses))
 
 if __name__ == "__main__":
     asyncio.run(main())

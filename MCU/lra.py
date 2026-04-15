@@ -31,8 +31,8 @@ imu_i2c = busio.I2C(board.IMU_SCL, board.IMU_SDA)
 sensor = LSM6DS3TRC(imu_i2c)
 
 mux = adafruit_tca9548a.PCA9546A(i2c)
-drv1 = adafruit_drv2605.DRV2605(mux[3])
-drv2 = adafruit_drv2605.DRV2605(mux[0])
+drv1 = adafruit_drv2605.DRV2605(mux[1])
+drv2 = adafruit_drv2605.DRV2605(mux[2])
 
 ble.start_advertising(advertisement)
 
@@ -54,28 +54,19 @@ while True:
                 print(f"Received: {received_str}")
                 
                 
-                if (received_str == '0'):
-                  drv1.sequence[0] = adafruit_drv2605.Effect(51)
-                elif (received_str == '1'):
-                  drv1.sequence[0] = adafruit_drv2605.Effect(50)
-                elif (received_str == '2'):
-                  drv1.sequence[0] = adafruit_drv2605.Effect(49)
-                elif (received_str == '3'):
-                  drv1.sequence[0] = adafruit_drv2605.Effect(48)
-                elif (received_str == '4'):
-                  drv1.sequence[0] = adafruit_drv2605.Effect(47)
-                elif (received_str == '5'):
-                  drv2.sequence[0] = adafruit_drv2605.Effect(51)
-                elif (received_str == '6'):
-                  drv2.sequence[0] = adafruit_drv2605.Effect(50)
-                elif (received_str == '7'):
-                  drv2.sequence[0] = adafruit_drv2605.Effect(49)
-                elif (received_str == '8'):
-                  drv2.sequence[0] = adafruit_drv2605.Effect(48)
-                elif (received_str == '9'):
-                  drv2.sequence[0] = adafruit_drv2605.Effect(47)
-                drv1.play()
-                drv2.play()
+                try:
+                    drv_id = int(received_str[0])
+                    effect_num = int(received_str[1:])
+                    if drv_id == 1:
+                        drv1.sequence[0] = adafruit_drv2605.Effect(effect_num)
+                        drv1.play()
+                    elif drv_id == 2:
+                        drv2.sequence[0] = adafruit_drv2605.Effect(effect_num)
+                        drv2.play()
+                    else:
+                        print(f"Unknown driver: {drv_id}")
+                except Exception as e:
+                    print(f"Error parsing command '{received_str}': {e}")
     else:
         led.value = True
 
