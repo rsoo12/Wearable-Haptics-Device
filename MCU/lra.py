@@ -15,63 +15,69 @@ import adafruit_drv2605
 import adafruit_tca9548a
 import struct
 
-# ble = BLERadio()
-# uart = UARTService()
-# advertisement = ProvideServicesAdvertisement(uart)
+ble = BLERadio()
+uart = UARTService()
+advertisement = ProvideServicesAdvertisement(uart)
 
-# led = digitalio.DigitalInOut(board.LED_BLUE)
-# led.direction = digitalio.Direction.OUTPUT
+led = digitalio.DigitalInOut(board.LED_BLUE)
+led.direction = digitalio.Direction.OUTPUT
 
-# imupwr = digitalio.DigitalInOut(board.IMU_PWR)
-# imupwr.direction = digitalio.Direction.OUTPUT
-# imupwr.value = True
-# time.sleep(0.1)
-# i2c = board.I2C()  
-# imu_i2c = busio.I2C(board.IMU_SCL, board.IMU_SDA)
-# sensor = LSM6DS3TRC(imu_i2c)
+imupwr = digitalio.DigitalInOut(board.IMU_PWR)
+imupwr.direction = digitalio.Direction.OUTPUT
+imupwr.value = True
+time.sleep(0.1)
+i2c = board.I2C()  
+imu_i2c = busio.I2C(board.IMU_SCL, board.IMU_SDA)
+sensor = LSM6DS3TRC(imu_i2c)
 
-# mux = adafruit_tca9548a.PCA9546A(i2c)
-# drv1 = adafruit_drv2605.DRV2605(mux[3])
+mux = adafruit_tca9548a.PCA9546A(i2c)
+drv1 = adafruit_drv2605.DRV2605(mux[3])
+drv2 = adafruit_drv2605.DRV2605(mux[0])
 
-# ble.start_advertising(advertisement)
+ble.start_advertising(advertisement)
 
-# seq = 0
-# while True:
-#     # drv1.sequence[0] = adafruit_drv2605.Effect(1)
-#     # drv1.play()
-#     if ble.connected:
-#         led.value = False 
-#         accel_x, accel_y, accel_z = sensor.acceleration
-#         gyro_x, gyro_y, gyro_z = sensor.gyro
-#         data = f"Accel: {accel_x:.2f},{accel_y:.2f}\n"
-#         uart.write(struct.pack("<H", seq) + data.encode("utf-8"))
-#         seq = (seq + 1) % 65536
-#         waiting = uart.in_waiting
-#         if waiting:
-#             received = uart.read(waiting)
-#             if received is not None:
-#                 try:
-#                     received_str = received.decode("utf-8").strip()
-#                 except Exception as e:
-#                     print(f"Error decoding UART data: {e}")
-#                     received_str = None
-#                 print(f"Received: {received_str}")
+seq = 0
+while True:
+    # drv1.sequence[0] = adafruit_drv2605.Effect(1)
+    # drv1.play()
+    if ble.connected:
+        led.value = False 
+        waiting = uart.in_waiting
+        if waiting:
+            received = uart.read(waiting)
+            if received is not None:
+                try:
+                    received_str = received.decode("utf-8").strip()
+                except Exception as e:
+                    print(f"Error decoding UART data: {e}")
+                    received_str = None
+                print(f"Received: {received_str}")
                 
                 
-#                 # if (received_str == 'a'):
-#                 #   drv1.sequence[0] = adafruit_drv2605.Effect(52)
-#                 #   print("FIRST")
-#                 # elif (received_str == 'b'):
-#                 #   drv1.sequence[0] = adafruit_drv2605.Effect(1)
-#                 #   print("SECOND")
-#                 # else:
-#                 #   drv1.sequence[0] = adafruit_drv2605.Effect(41)
-#                 #   print("THIRD")
-#                 # drv1.play()
-#                 # time.sleep(0.5)
-#         time.sleep(0.0001)
-#     else:
-#         led.value = True
+                if (received_str == '0'):
+                  drv1.sequence[0] = adafruit_drv2605.Effect(51)
+                elif (received_str == '1'):
+                  drv1.sequence[0] = adafruit_drv2605.Effect(50)
+                elif (received_str == '2'):
+                  drv1.sequence[0] = adafruit_drv2605.Effect(49)
+                elif (received_str == '3'):
+                  drv1.sequence[0] = adafruit_drv2605.Effect(48)
+                elif (received_str == '4'):
+                  drv1.sequence[0] = adafruit_drv2605.Effect(47)
+                elif (received_str == '5'):
+                  drv2.sequence[0] = adafruit_drv2605.Effect(51)
+                elif (received_str == '6'):
+                  drv2.sequence[0] = adafruit_drv2605.Effect(50)
+                elif (received_str == '7'):
+                  drv2.sequence[0] = adafruit_drv2605.Effect(49)
+                elif (received_str == '8'):
+                  drv2.sequence[0] = adafruit_drv2605.Effect(48)
+                elif (received_str == '9'):
+                  drv2.sequence[0] = adafruit_drv2605.Effect(47)
+                drv1.play()
+                drv2.play()
+    else:
+        led.value = True
 
 
 #*****************************************************************************# 
@@ -80,65 +86,65 @@ import struct
 
 # https://learn.adafruit.com/adafruit-lsm6ds3tr-c-6-dof-accel-gyro-imu/python-circuitpython
 
-import time
+# import time
 
-import board
-import busio
-import digitalio
+# import board
+# import busio
+# import digitalio
 
-# For haptic drivers and I2C mux
-import adafruit_drv2605
-import adafruit_tca9548a
+# # For haptic drivers and I2C mux
+# import adafruit_drv2605
+# import adafruit_tca9548a
 
 
-i2c = board.I2C()  # uses board.SCL and board.SDA
-# Main I2C bus for mux and haptic drivers
-mux = adafruit_tca9548a.PCA9546A(i2c)
+# i2c = board.I2C()  # uses board.SCL and board.SDA
+# # Main I2C bus for mux and haptic drivers
+# mux = adafruit_tca9548a.PCA9546A(i2c)
 
-# Initialize two DRV2605 haptic drivers
-drv1 = adafruit_drv2605.DRV2605(mux[3])
-# drv2 = adafruit_drv2605.DRV2605(mux[0])
-drv3 = adafruit_drv2605.DRV2605(mux[1])
+# # Initialize two DRV2605 haptic drivers
+# drv1 = adafruit_drv2605.DRV2605(mux[3])
+# # drv2 = adafruit_drv2605.DRV2605(mux[0])
+# drv3 = adafruit_drv2605.DRV2605(mux[1])
 
-from adafruit_lsm6ds.lsm6ds3trc import LSM6DS3TRC
+# from adafruit_lsm6ds.lsm6ds3trc import LSM6DS3TRC
 
-# On the Seeed XIAO nRF52840 Sense the LSM6DS3TR-C IMU is connected on a separate
-# I2C bus and it has its own power pin that we need to enable.
-imupwr = digitalio.DigitalInOut(board.IMU_PWR)
-imupwr.direction = digitalio.Direction.OUTPUT
-imupwr.value = True
-time.sleep(0.1)
+# # On the Seeed XIAO nRF52840 Sense the LSM6DS3TR-C IMU is connected on a separate
+# # I2C bus and it has its own power pin that we need to enable.
+# imupwr = digitalio.DigitalInOut(board.IMU_PWR)
+# imupwr.direction = digitalio.Direction.OUTPUT
+# imupwr.value = True
+# time.sleep(0.1)
 
-# imu_i2c = busio.I2C(board.IMU_SCL, board.IMU_SDA)
-# sensor = LSM6DS3TRC(imu_i2c)
+# # imu_i2c = busio.I2C(board.IMU_SCL, board.IMU_SDA)
+# # sensor = LSM6DS3TRC(imu_i2c)
 
-while True:
-    # accel_x, accel_y, accel_z = sensor.acceleration
-    # print(f"Acceleration: X:{accel_x:.2f}, Y: {accel_y:.2f}, Z: {accel_z:.2f} m/s^2")
-    # gyro_x, gyro_y, gyro_z = sensor.gyro
-    # print(f"Gyro X:{gyro_x:.2f}, Y: {gyro_y:.2f}, Z: {gyro_z:.2f} radians/s")
-    # print("")
-    # time.sleep(0.5)
+# while True:
+#     # accel_x, accel_y, accel_z = sensor.acceleration
+#     # print(f"Acceleration: X:{accel_x:.2f}, Y: {accel_y:.2f}, Z: {accel_z:.2f} m/s^2")
+#     # gyro_x, gyro_y, gyro_z = sensor.gyro
+#     # print(f"Gyro X:{gyro_x:.2f}, Y: {gyro_y:.2f}, Z: {gyro_z:.2f} radians/s")
+#     # print("")
+#     # time.sleep(0.5)
 
    
-    drv1.sequence[0] = adafruit_drv2605.Effect(52)
-    drv1.play()
-    time.sleep(0.5)
-    # drv2.sequence[0] = adafruit_drv2605.Effect(52)
-    # drv2.play()
-    # time.sleep(0.5)
-    drv3.sequence[0] = adafruit_drv2605.Effect(52)
-    drv3.play()
-    time.sleep(0.5)
-    drv1.sequence[0] = adafruit_drv2605.Effect(52)
-    drv1.play()
-    time.sleep(0.5)
-    # drv2.sequence[0] = adafruit_drv2605.Effect(52)
-    # drv2.play()
-    # time.sleep(0.5)
-    drv3.sequence[0] = adafruit_drv2605.Effect(52)
-    drv3.play()
-    time.sleep(0.5)
+#     drv1.sequence[0] = adafruit_drv2605.Effect(52)
+#     drv1.play()
+#     time.sleep(0.5)
+#     # drv2.sequence[0] = adafruit_drv2605.Effect(52)
+#     # drv2.play()
+#     # time.sleep(0.5)
+#     drv3.sequence[0] = adafruit_drv2605.Effect(52)
+#     drv3.play()
+#     time.sleep(0.5)
+#     drv1.sequence[0] = adafruit_drv2605.Effect(52)
+#     drv1.play()
+#     time.sleep(0.5)
+#     # drv2.sequence[0] = adafruit_drv2605.Effect(52)
+#     # drv2.play()
+#     # time.sleep(0.5)
+#     drv3.sequence[0] = adafruit_drv2605.Effect(52)
+#     drv3.play()
+#     time.sleep(0.5)
 
 #*****************************************************************************# 
 # Uses the SEED XIAO NRF52840 library to read acceleration data (simpler than above code, same purpose)
