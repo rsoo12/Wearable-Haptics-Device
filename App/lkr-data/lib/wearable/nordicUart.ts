@@ -1,4 +1,5 @@
 /** Nordic UART Service (matches Bluetooth/bluetooth.py). */
+import { encode as btoa } from 'base-64';
 import type { BleManager, Device, Service } from 'react-native-ble-plx';
 
 export const NORDIC_UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
@@ -88,4 +89,22 @@ export async function connectNordicDevices(
   }
 
   return connected;
+}
+
+/**
+ * Write UTF-8 / binary-safe bytes to Nordic UART TX (same pattern as the BLE console test page).
+ * MCU README: byte 0x61 / 0x62 select vibration patterns; ASCII `"a"` / `"b"` encodes those bytes.
+ */
+export async function writeNordicUartTx(
+  manager: BleManager,
+  deviceId: string,
+  payload: string,
+): Promise<void> {
+  const base64Payload = btoa(payload);
+  await manager.writeCharacteristicWithResponseForDevice(
+    deviceId,
+    NORDIC_UART_SERVICE_UUID,
+    NORDIC_UART_TX_CHAR_UUID,
+    base64Payload,
+  );
 }

@@ -6,4 +6,5 @@ export * from '@/lib/wearable/gaitPhase';
 export * from '@/lib/wearable/fpaAlgorithm';
 export * from '@/lib/wearable/imuPayload';
 export * from '@/lib/wearable/nordicUart';
+export * from '@/lib/wearable/nordicRoles';
 export * from '@/lib/wearable/fpaPipeline';

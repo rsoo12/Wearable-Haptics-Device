@@ -5,6 +5,7 @@ import {
   FpaPipeline,
   type FpaPipelineOutput,
 } from '@/lib/wearable/fpaPipeline';
+import { nextPersistentFpaRunNumber } from '@/lib/wearable/fpaRunCounter';
 import {
   NORDIC_UART_RX_CHAR_UUID,
   NORDIC_UART_SERVICE_UUID,
@@ -30,6 +31,7 @@ type Options = {
 export function useWearableFpaPipeline(options?: Options) {
   const pipelinesRef = useRef(new Map<string, FpaPipeline>());
   const subsRef = useRef(new Map<string, Subscription>());
+  const activeRunNumberRef = useRef<number | null>(null);
   const [latest, setLatest] = useState<FpaPipelineOutput | null>(null);
 
   const stop = useCallback(() => {
@@ -40,13 +42,16 @@ export function useWearableFpaPipeline(options?: Options) {
   }, []);
 
   const start = useCallback(
-    (device: Device) => {
+    async (device: Device) => {
       const existingSub = subsRef.current.get(device.id);
       existingSub?.remove();
 
       let pipeline = pipelinesRef.current.get(device.id);
       if (!pipeline) {
-        pipeline = new FpaPipeline(options);
+        if (activeRunNumberRef.current == null) {
+          activeRunNumberRef.current = await nextPersistentFpaRunNumber();
+        }
+        pipeline = new FpaPipeline({ ...options, globalRunNumber: activeRunNumberRef.current });
         pipelinesRef.current.set(device.id, pipeline);
       }
 
@@ -74,11 +79,11 @@ export function useWearableFpaPipeline(options?: Options) {
   );
 
   const reset = useCallback(() => {
-    for (const pipeline of pipelinesRef.current.values()) {
-      pipeline.reset();
-    }
+    stop();
+    pipelinesRef.current.clear();
+    activeRunNumberRef.current = null;
     setLatest(null);
-  }, []);
+  }, [stop]);
 
   useEffect(() => () => stop(), [stop]);
 

@@ -13,6 +13,8 @@ export type FpaPipelineOutput = {
   inFeedbackWindow: boolean;
   stepCount: number;
   fpaThisStepDeg: number;
+  /** Process-wide run counter, survives multiple pipeline runs. */
+  globalRunNumber: number;
 };
 
 /**
@@ -24,12 +26,19 @@ export class FpaPipeline {
   fpa: FPA;
   private readonly timestamps: number[] = [];
   private readonly windowSize: number;
+  private readonly globalRunNumber: number;
 
-  constructor(options?: { datarate?: number; isRightFoot?: boolean; rateWindow?: number }) {
+  constructor(options?: {
+    datarate?: number;
+    isRightFoot?: boolean;
+    rateWindow?: number;
+    globalRunNumber?: number;
+  }) {
     const dr = options?.datarate ?? 180;
     this.windowSize = options?.rateWindow ?? 50;
     this.gaitPhase = new GaitPhase(dr);
     this.fpa = new FPA(options?.isRightFoot ?? true, dr);
+    this.globalRunNumber = options?.globalRunNumber ?? 1;
   }
 
   private calcRate(monoSec: number): number {
@@ -60,6 +69,7 @@ export class FpaPipeline {
       inFeedbackWindow: gp.inFeedbackWindow,
       stepCount: gp.stepCount,
       fpaThisStepDeg: fpa.FPA_this_step,
+      globalRunNumber: this.globalRunNumber,
     };
   }
 
