@@ -39,10 +39,6 @@ export function useWearableFpaPipeline(options?: Options) {
       sub.remove();
     }
     subsRef.current.clear();
-    for (const sub of subsRef.current.values()) {
-      sub.remove();
-    }
-    subsRef.current.clear();
   }, []);
 
   const start = useCallback(
@@ -79,7 +75,6 @@ export function useWearableFpaPipeline(options?: Options) {
       );
       subsRef.current.set(device.id, sub);
     },
-    [options],
     [options],
   );
 

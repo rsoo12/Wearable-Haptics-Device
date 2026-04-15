@@ -11,6 +11,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      initialRouteName="active-session"
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
@@ -35,16 +36,6 @@ export default function TabLayout() {
         options={{
           title: 'Insights',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="chart.bar.xaxis" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="index"
-        options={{
-          href: null,
-          title: 'Bluetooth',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="dot.radiowaves.left.and.right" color={color} />
-          ),
         }}
       />
       <Tabs.Screen
