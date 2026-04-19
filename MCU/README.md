@@ -15,7 +15,7 @@
    pip install circup
    pip install mpremote
    ```
-5. Copy the contents of this repo's `IMU.py` into `code.py` on the device (Bluetooth code should already be uncommented and ready to run)
+5. Copy the contents of this repo's `foot_mounted_wearable.py` or `shank_mounted_wearable.py` into `code.py` on the MCU, depending on which MCU you're programming. 
 6. Run `circup install --auto` to install dependencies
 7. If you see errors like `missing import: ___` when running the code, run `circup install <package_name>`
 8. Run `mpremote repl` in the terminal (this renames the terminal to "mpremote" — open a new tab for other commands)
