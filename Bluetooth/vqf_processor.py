@@ -32,14 +32,20 @@ CALIBRATION_DURATION = 60  # seconds
 def lra_feedback(diff, cmd_queue: asyncio.Queue):
     # Positive diff → FPA below baseline (toe-in) → drv2
     # Negative diff → FPA above baseline (toe-out) → drv1
-    if diff > 12:
-        drv = 2
-    elif diff < -12:
-        drv = 1
+    if diff < -12:
+        drv = 2 #right
+    elif diff > -8:
+        drv = 1 #left
     else:
         return None  # within threshold, no feedback
 
-    direction = "toe-in (drv2)" if diff > 0 else "toe-out (drv1)"
+    # if diff < -14:
+    #     drv = 2 #right
+    # elif diff > -6:
+    #     drv = 1 #left
+    # else:
+    #     return None 
+    direction = "toe-in (drv2)" if drv == 2 else "toe-out (drv1)"
     cmd = f"{drv}52"
     print(f"[LRA Feedback] diff={diff:.2f} deg → {direction} → cmd='{cmd}'")
     cmd_queue.put_nowait(cmd)
@@ -48,10 +54,11 @@ def lra_feedback(diff, cmd_queue: asyncio.Queue):
 async def fpa_consumer(packet_queue: asyncio.Queue, gp: GaitPhase, fpa: FPA, writer: csv.writer, cmd_queue: asyncio.Queue):
     start_time = asyncio.get_running_loop().time()
     calibration_fpas = []
-    seen_steps = {1, 2, 3, 4, 5, 6, 7} if CALIBRATION else set()  # skip first 7 steps only during calibration
+    calibrating = CALIBRATION
+    seen_steps = set()
 
     base = None
-    if not CALIBRATION:
+    if not calibrating:
         with open("base_fpa.csv", "r", newline="") as cal_f:
             cal_reader = csv.reader(cal_f)
             next(cal_reader)  # skip header
@@ -89,7 +96,7 @@ async def fpa_consumer(packet_queue: asyncio.Queue, gp: GaitPhase, fpa: FPA, wri
         row_acc = [f"{acc[0]:.4f}", f"{acc[1]:.4f}", f"{acc[2]:.4f}"]
         row_gyr = [f"{gyr[0]:.4f}", f"{gyr[1]:.4f}", f"{gyr[2]:.4f}"]
 
-        if CALIBRATION:
+        if calibrating:
             elapsed = asyncio.get_running_loop().time() - start_time
 
             if gp.in_feedback_window and gp.step_count not in seen_steps:
@@ -105,15 +112,21 @@ async def fpa_consumer(packet_queue: asyncio.Queue, gp: GaitPhase, fpa: FPA, wri
                         cal_writer.writerow(["base_fpa"])
                         cal_writer.writerow([f"{avg_fpa:.4f}"])
                     print(f"Calibration complete. Average FPA = {avg_fpa:.2f} deg ({len(calibration_fpas)} steps) written to base_fpa.csv")
+                    base = avg_fpa
                 else:
                     print("Calibration complete but no FPA values were collected.")
-                return
+                    return
+
+                # Switch to feedback mode
+                calibrating = False
+                seen_steps = set()
+                print("Starting feedback...")
         else:
             if gp.in_feedback_window and gp.step_count not in seen_steps:
                 seen_steps.add(gp.step_count)
                 print(f"Step {gp.step_count}: FPA = {fpa.FPA_this_step:.1f} deg  rate={rate:.1f} Hz")
 
-                diff = base - fpa.FPA_this_step
+                diff = fpa.FPA_this_step - base
                 cmd = lra_feedback(diff, cmd_queue)
                 if cmd is not None:
                     drv_id, effect = cmd[0], cmd[1:]
