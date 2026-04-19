@@ -36,8 +36,7 @@ uv run python3 FPA_training.py
 ## Directory Structure
 
 ```
-outputs/    # IMU FPA logs (.csv) from Bluetooth data collection
-data/       # Mocap reference data
+outputs/    # IMU and MOCAP logs (.csv) from Bluetooth data collection
 graphs/     # Generated plots (auto-created on first run)
 utils/      # Shared processing utilities (mocap parsing, synchronization, visualization)
 ```
