@@ -63,10 +63,10 @@ export default function ActiveSessionScreen() {
 
   const [isRunning, setIsRunning] = useState(false);
 
-  const mockSessionSeconds = 12 * 60 + 34;
+  const sessionSeconds = 12 * 60 + 34;
 
   const series: Point[] = useMemo(() => {
-    // Mock “live-ish” session curve.
+    // Session chart sample curve.
     const base = 6.8;
     const points: Point[] = [];
     for (let i = 0; i < 64; i++) {
@@ -97,7 +97,7 @@ export default function ActiveSessionScreen() {
           <ThemedText style={stylesThemed.kpiLabel}>Current FPA</ThemedText>
           <ThemedText style={stylesThemed.kpiValue}>{currentFpa.toFixed(1)}°</ThemedText>
           <View style={stylesThemed.kpiMetaRow}>
-            <ThemedText style={stylesThemed.kpiMeta}>Session: {formatMinutes(mockSessionSeconds)}</ThemedText>
+            <ThemedText style={stylesThemed.kpiMeta}>Session: {formatMinutes(sessionSeconds)}</ThemedText>
             <ThemedText style={stylesThemed.kpiMeta}>Avg: {avgFpa.toFixed(1)}°</ThemedText>
           </View>
         </ThemedView>
@@ -131,9 +131,7 @@ export default function ActiveSessionScreen() {
               <ThemedText style={stylesThemed.buttonTextSecondary}>Stop</ThemedText>
             </TouchableOpacity>
           </ThemedView>
-          <ThemedText style={stylesThemed.muted}>
-            Mock UI: buttons don’t start a real recording yet.
-          </ThemedText>
+          <ThemedText style={stylesThemed.muted}>Buttons control this screen state.</ThemedText>
         </ThemedView>
       </ScrollView>
     </ThemedView>

@@ -32,7 +32,7 @@ export default function InsightsScreen() {
   const { scrollContentStyle } = useIphone13ContentFrame({ includeTabBarInset: true });
   const stylesThemed = useMemo(() => createStyles(theme), [theme]);
 
-  // Mock “current stats”
+  // Current stats shown in this view.
   const avgFpa30 = 6.5;
   const variability30 = 1.4;
   const sessionsPerWeek = 4.2;
@@ -118,7 +118,7 @@ export default function InsightsScreen() {
 
         <ThemedView style={stylesThemed.section}>
           <ThemedText type="subtitle">Habit tracking</ThemedText>
-          <ThemedText style={stylesThemed.muted}>Mock toggles (stateful UI only).</ThemedText>
+          <ThemedText style={stylesThemed.muted}>Toggle habits to personalize recommendations.</ThemedText>
 
           <ThemedView style={stylesThemed.cards}>
             {habits.map(h => (

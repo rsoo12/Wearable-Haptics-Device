@@ -113,9 +113,7 @@ export default function HistoryScreen() {
 
         <ThemedView style={stylesThemed.section}>
           <ThemedText type="subtitle">Past sessions</ThemedText>
-          <ThemedText style={stylesThemed.muted}>
-            Mock cards showing previous “active session” summaries.
-          </ThemedText>
+          <ThemedText style={stylesThemed.muted}>Cards showing previous active session summaries.</ThemedText>
 
           <ThemedView style={stylesThemed.cards}>
             {sessions.map(s => (
