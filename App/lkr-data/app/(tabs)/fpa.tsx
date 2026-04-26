@@ -4,10 +4,10 @@ import {
   ScrollView,
   Share,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import { BleManager, Device } from 'react-native-ble-plx';
 
 import { ThemedText } from '@/components/themed-text';
@@ -28,8 +28,16 @@ import {
 
 const CALIBRATION_DURATION_SEC = 30;
 const CALIBRATION_IGNORE_INITIAL_STEPS = 7;
-const FEEDBACK_DIFF_THRESHOLD_DEG = 12;
 const FEEDBACK_EFFECT = 52;
+const FEEDBACK_TOE_IN_THRESHOLD_DEG = -12;
+const FEEDBACK_TOE_OUT_THRESHOLD_DEG = -8;
+
+function getAutoFeedbackCommand(diffDeg: number): string {
+  // Match Bluetooth/vqf_processor.py lra_feedback() thresholds and command mapping.
+  if (diffDeg < FEEDBACK_TOE_IN_THRESHOLD_DEG) return `2${FEEDBACK_EFFECT}`;
+  if (diffDeg > FEEDBACK_TOE_OUT_THRESHOLD_DEG) return `1${FEEDBACK_EFFECT}`;
+  return '';
+}
 
 export default function FpaScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -42,9 +50,7 @@ export default function FpaScreen() {
   const [receiverLabel, setReceiverLabel] = useState<string>('—');
   const [senderLabel, setSenderLabel] = useState<string>('—');
   const [connectedCount, setConnectedCount] = useState<number>(0);
-  const [hapticPayload, setHapticPayload] = useState<string>('152');
   const [hapticStatus, setHapticStatus] = useState<string>('');
-  const [autoFeedbackEnabled, setAutoFeedbackEnabled] = useState<boolean>(true);
   const [csvStatus, setCsvStatus] = useState<string>('');
   const [isCalibrating, setIsCalibrating] = useState<boolean>(false);
   const [calibrationSecondsLeft, setCalibrationSecondsLeft] = useState<number>(0);
@@ -232,20 +238,6 @@ export default function FpaScreen() {
     })();
   };
 
-  const onSendHaptic = () => {
-    const manager = managerRef.current;
-    if (!manager) return;
-    void (async () => {
-      try {
-        await sendHaptic(manager, hapticPayload);
-        setHapticStatus(`Sent: ${JSON.stringify(hapticPayload)}`);
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setHapticStatus(`Send error: ${msg}`);
-      }
-    })();
-  };
-
   const appendCsvRow = useCallback((args: {
     step: number;
     fpaDeg: number;
@@ -288,7 +280,7 @@ export default function FpaScreen() {
         'step_num',
         'rate_hz',
         'fpa_deg',
-        'base_minus_fpa_deg',
+        'fpa_minus_base_deg',
         'drv',
         'effect',
         'sent_cmd',
@@ -300,19 +292,30 @@ export default function FpaScreen() {
         'gz_deg_s',
       ].join(',');
       const csv = `${header}\n${csvRowsRef.current.join('\n')}\n`;
+      const filename = `fpa_log_${Date.now()}.csv`;
+      const targetDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+      if (!targetDir) {
+        throw new Error('No writable app directory is available.');
+      }
+      const fileUri = `${targetDir}${filename}`;
+      await FileSystem.writeAsStringAsync(fileUri, csv, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
 
-      // Use RN Share (no expo-file-system native module — avoids iOS pod / SDK mismatches).
       const result = await Share.share(
         {
-          message: csv,
-          title: `fpa_log_${Date.now()}.csv`,
+          title: filename,
+          url: fileUri,
+          message: Platform.OS === 'android' ? fileUri : undefined,
         },
         Platform.OS === 'ios' ? { subject: 'FPA session CSV' } : undefined,
       );
       if (result?.action === Share.dismissedAction) {
         setCsvStatus('Export cancelled.');
       } else {
-        setCsvStatus(`Shared ${csvRowsRef.current.length} rows (open share sheet to save or send).`);
+        setCsvStatus(
+          `Saved and shared ${filename} (${csvRowsRef.current.length} rows).`,
+        );
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -367,25 +370,16 @@ export default function FpaScreen() {
 
     const fpaDeg = latest.fpaThisStepDeg;
     const base = baseFpaDeg;
-    const diff = base == null ? null : base - fpaDeg;
+    const diff = base == null ? null : fpaDeg - base;
     let cmd = '';
     let drv = '';
     let effect = '';
 
-    if (
-      autoFeedbackEnabled &&
-      !isCalibrating &&
-      diff != null &&
-      connectedRef.current.length > 1
-    ) {
-      if (diff > FEEDBACK_DIFF_THRESHOLD_DEG) {
-        drv = 'DRV2';
+    if (!isCalibrating && diff != null && connectedRef.current.length > 1) {
+      cmd = getAutoFeedbackCommand(diff);
+      if (cmd) {
+        drv = cmd.startsWith('2') ? 'DRV2' : 'DRV1';
         effect = String(FEEDBACK_EFFECT);
-        cmd = `2${FEEDBACK_EFFECT}`;
-      } else if (diff < -FEEDBACK_DIFF_THRESHOLD_DEG) {
-        drv = 'DRV1';
-        effect = String(FEEDBACK_EFFECT);
-        cmd = `1${FEEDBACK_EFFECT}`;
       }
       if (cmd) {
         void (async () => {
@@ -408,7 +402,7 @@ export default function FpaScreen() {
       effect,
       sentCommand: cmd,
     });
-  }, [latest, baseFpaDeg, autoFeedbackEnabled, isCalibrating, sendHaptic, appendCsvRow]);
+  }, [latest, baseFpaDeg, isCalibrating, sendHaptic, appendCsvRow]);
 
   const feedbackLine = latest?.inFeedbackWindow
     ? `Feedback window: FPA ≈ ${latest.fpaThisStepDeg.toFixed(1)}°`
@@ -467,67 +461,12 @@ export default function FpaScreen() {
           <ThemedText type="subtitle">Haptics (sender device)</ThemedText>
           <ThemedText style={stylesThemed.muted}>
             Writes Nordic UART TX (same as BLE console). LRA firmware expects string commands like
-            &quot;152&quot; or &quot;252&quot; (`drv + effect`), and auto-feedback uses FPA-vs-baseline thresholds.
+            &quot;152&quot; or &quot;252&quot; (`drv + effect`). Commands are sent automatically from each
+            detected FPA step using the same threshold logic as `Bluetooth/vqf_processor.py`.
           </ThemedText>
-          <TextInput
-            value={hapticPayload}
-            onChangeText={setHapticPayload}
-            placeholder="Payload (e.g. 152 or 252)"
-            placeholderTextColor={theme.placeholder}
-            style={stylesThemed.input}
-            autoCapitalize="none"
-          />
-          <View style={stylesThemed.buttonRow}>
-            <TouchableOpacity style={stylesThemed.button} onPress={onSendHaptic} activeOpacity={0.7}>
-              <ThemedText style={stylesThemed.buttonText}>Send vibration</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[stylesThemed.button, !autoFeedbackEnabled && stylesThemed.buttonDisabled]}
-              onPress={() => setAutoFeedbackEnabled(prev => !prev)}
-              activeOpacity={0.7}>
-              <ThemedText style={stylesThemed.buttonText}>
-                Auto feedback: {autoFeedbackEnabled ? 'On' : 'Off'}
-              </ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={stylesThemed.button}
-              onPress={() => {
-                setHapticPayload('152');
-                const manager = managerRef.current;
-                if (!manager) return;
-                void (async () => {
-                  try {
-                    await sendHaptic(manager, '152');
-                    setHapticStatus('Sent pattern: "152" (DRV1 effect 52)');
-                  } catch (e: unknown) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    setHapticStatus(`Send error: ${msg}`);
-                  }
-                })();
-              }}
-              activeOpacity={0.7}>
-              <ThemedText style={stylesThemed.buttonText}>Pattern DRV1</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={stylesThemed.button}
-              onPress={() => {
-                setHapticPayload('252');
-                const manager = managerRef.current;
-                if (!manager) return;
-                void (async () => {
-                  try {
-                    await sendHaptic(manager, '252');
-                    setHapticStatus('Sent pattern: "252" (DRV2 effect 52)');
-                  } catch (e: unknown) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    setHapticStatus(`Send error: ${msg}`);
-                  }
-                })();
-              }}
-              activeOpacity={0.7}>
-              <ThemedText style={stylesThemed.buttonText}>Pattern DRV2</ThemedText>
-            </TouchableOpacity>
-          </View>
+          <ThemedText style={stylesThemed.resultText}>
+            Auto feedback is always enabled while connected and not calibrating.
+          </ThemedText>
           {hapticStatus ? (
             <ThemedText style={stylesThemed.resultText}>{hapticStatus}</ThemedText>
           ) : null}
@@ -601,16 +540,5 @@ function createStyles(theme: (typeof Colors)['light']) {
     result: { gap: 8, paddingTop: 10 },
     resultText: { fontSize: 15, color: theme.text },
     errorText: { fontSize: 13, color: theme.buttonDestructive },
-    input: {
-      borderRadius: 10,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.border,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 16,
-      minHeight: 44,
-      color: theme.text,
-      backgroundColor: theme.inputBackground,
-    },
   });
 }
