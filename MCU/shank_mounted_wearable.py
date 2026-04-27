@@ -33,6 +33,8 @@ sensor = LSM6DS3TRC(imu_i2c)
 mux = adafruit_tca9548a.PCA9546A(i2c)
 drv1 = adafruit_drv2605.DRV2605(mux[1])
 drv2 = adafruit_drv2605.DRV2605(mux[2])
+drv1.use_LRM()
+drv2.use_LRM()
 
 ble.start_advertising(advertisement)
 
