@@ -18,6 +18,12 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
       }}>
       <Tabs.Screen
+        name="index"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
         name="active-session"
         options={{
           title: 'Active Session',
@@ -47,6 +53,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="fpa"
         options={{
+          href: null,
           title: 'FPA',
           tabBarIcon: ({ color }) => (
             <IconSymbol size={28} name="chart.line.uptrend.xyaxis" color={color} />

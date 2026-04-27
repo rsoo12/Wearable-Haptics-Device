@@ -1,5 +1,13 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Platform,
+  ScrollView,
+  Share,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
 import { BleManager, Device } from 'react-native-ble-plx';
 
 import { ThemedText } from '@/components/themed-text';
@@ -20,6 +28,16 @@ import {
 
 const CALIBRATION_DURATION_SEC = 30;
 const CALIBRATION_IGNORE_INITIAL_STEPS = 7;
+const FEEDBACK_EFFECT = 52;
+const FEEDBACK_TOE_IN_THRESHOLD_DEG = -12;
+const FEEDBACK_TOE_OUT_THRESHOLD_DEG = -8;
+
+function getAutoFeedbackCommand(diffDeg: number): string {
+  // Match Bluetooth/vqf_processor.py lra_feedback() thresholds and command mapping.
+  if (diffDeg < FEEDBACK_TOE_IN_THRESHOLD_DEG) return `2${FEEDBACK_EFFECT}`;
+  if (diffDeg > FEEDBACK_TOE_OUT_THRESHOLD_DEG) return `1${FEEDBACK_EFFECT}`;
+  return '';
+}
 
 export default function FpaScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -32,8 +50,8 @@ export default function FpaScreen() {
   const [receiverLabel, setReceiverLabel] = useState<string>('—');
   const [senderLabel, setSenderLabel] = useState<string>('—');
   const [connectedCount, setConnectedCount] = useState<number>(0);
-  const [hapticPayload, setHapticPayload] = useState<string>('a');
   const [hapticStatus, setHapticStatus] = useState<string>('');
+  const [csvStatus, setCsvStatus] = useState<string>('');
   const [isCalibrating, setIsCalibrating] = useState<boolean>(false);
   const [calibrationSecondsLeft, setCalibrationSecondsLeft] = useState<number>(0);
   const [calibrationStatus, setCalibrationStatus] = useState<string>('');
@@ -43,8 +61,10 @@ export default function FpaScreen() {
   const connectedRef = useRef<Device[]>([]);
   const calibrationValuesRef = useRef<number[]>([]);
   const calibrationSeenStepsRef = useRef<Set<number>>(new Set());
+  const feedbackSeenStepsRef = useRef<Set<number>>(new Set());
   const calibrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const calibrationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const csvRowsRef = useRef<string[]>([]);
 
   const { latest, start: startPipeline, stop: stopPipeline, reset: resetPipeline } =
     useWearableFpaPipeline({ datarate: 180, isRightFoot: true });
@@ -128,6 +148,7 @@ export default function FpaScreen() {
     setReceiverLabel('—');
     setSenderLabel('—');
     setHapticStatus('');
+    feedbackSeenStepsRef.current = new Set();
   };
 
   const connectAndStart = async (devices: Device[]) => {
@@ -135,25 +156,36 @@ export default function FpaScreen() {
     if (!manager) return;
     try {
       stopScan();
-      const sorted = [...devices].sort((a, b) => a.id.localeCompare(b.id));
-      const pair = sorted.slice(0, 2);
-      const connected = await connectNordicDevices(manager, pair);
+      // 1) Broadly scan and attempt connection to all CIRCUITPY matches first.
+      const connected = await connectNordicDevices(manager, devices);
       if (connected.length === 0) {
         throw new Error('Found matching devices, but could not connect to any of them.');
       }
 
+      // 2) Identify RX (IMU) vs TX (LRA) roles from known names when present.
       const { receiver, sender } = assignReceiverAndSenderDevices(connected);
+      if (!sender) {
+        throw new Error(
+          'Found only one CIRCUITPY device. Need both IMU (RX) and LRA (TX) devices to run dual pipelines.',
+        );
+      }
 
       connectedRef.current = connected.map(item => item.device);
       setConnectedCount(connected.length);
       setReceiverLabel(labelDevice(receiver.device));
-      setSenderLabel(sender ? labelDevice(sender.device) : '— (second device: haptics over UART TX)');
+      setSenderLabel(labelDevice(sender.device));
       setStatus('connected');
       setError('');
+      setCsvStatus('');
 
+      // 3) Differentiate pipelines:
+      //    - RX device -> FPA stream/analysis pipeline.
+      //    - TX device -> haptics command pipeline (write-only).
       resetPipeline();
       resetHapticsWriter();
-      configureSender(sender?.device ?? null);
+      feedbackSeenStepsRef.current = new Set();
+      csvRowsRef.current = [];
+      configureSender(sender.device);
       await startPipeline(receiver.device);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -206,18 +238,89 @@ export default function FpaScreen() {
     })();
   };
 
-  const onSendHaptic = () => {
-    const manager = managerRef.current;
-    if (!manager) return;
-    void (async () => {
-      try {
-        await sendHaptic(manager, hapticPayload);
-        setHapticStatus(`Sent: ${JSON.stringify(hapticPayload)}`);
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setHapticStatus(`Send error: ${msg}`);
+  const appendCsvRow = useCallback((args: {
+    step: number;
+    fpaDeg: number;
+    diffDeg: number | null;
+    drv: string;
+    effect: string;
+    sentCommand: string;
+  }) => {
+    if (!latest) return;
+    const now = new Date().toISOString();
+    const sd = latest.sensorData;
+    csvRowsRef.current.push(
+      [
+        now,
+        String(args.step),
+        latest.rateHz.toFixed(2),
+        args.fpaDeg.toFixed(2),
+        args.diffDeg == null ? '' : args.diffDeg.toFixed(2),
+        args.drv,
+        args.effect,
+        args.sentCommand,
+        sd.AccelX.toFixed(4),
+        sd.AccelY.toFixed(4),
+        sd.AccelZ.toFixed(4),
+        sd.GyroX.toFixed(4),
+        sd.GyroY.toFixed(4),
+        sd.GyroZ.toFixed(4),
+      ].join(','),
+    );
+  }, [latest]);
+
+  const exportCsv = async () => {
+    try {
+      if (csvRowsRef.current.length === 0) {
+        setCsvStatus('No rows to export yet. Walk a few steps first.');
+        return;
       }
-    })();
+      const header = [
+        'time_iso',
+        'step_num',
+        'rate_hz',
+        'fpa_deg',
+        'fpa_minus_base_deg',
+        'drv',
+        'effect',
+        'sent_cmd',
+        'ax_m_s2',
+        'ay_m_s2',
+        'az_m_s2',
+        'gx_deg_s',
+        'gy_deg_s',
+        'gz_deg_s',
+      ].join(',');
+      const csv = `${header}\n${csvRowsRef.current.join('\n')}\n`;
+      const filename = `fpa_log_${Date.now()}.csv`;
+      const targetDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
+      if (!targetDir) {
+        throw new Error('No writable app directory is available.');
+      }
+      const fileUri = `${targetDir}${filename}`;
+      await FileSystem.writeAsStringAsync(fileUri, csv, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      const result = await Share.share(
+        {
+          title: filename,
+          url: fileUri,
+          message: Platform.OS === 'android' ? fileUri : undefined,
+        },
+        Platform.OS === 'ios' ? { subject: 'FPA session CSV' } : undefined,
+      );
+      if (result?.action === Share.dismissedAction) {
+        setCsvStatus('Export cancelled.');
+      } else {
+        setCsvStatus(
+          `Saved and shared ${filename} (${csvRowsRef.current.length} rows).`,
+        );
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setCsvStatus(`Export failed: ${msg}`);
+    }
   };
 
   const canDisconnect = status === 'scanning' || connectedRef.current.length > 0;
@@ -256,6 +359,50 @@ export default function FpaScreen() {
     calibrationSeenStepsRef.current.add(latest.stepCount);
     calibrationValuesRef.current.push(latest.fpaThisStepDeg);
   }, [isCalibrating, latest]);
+
+  useEffect(() => {
+    if (!latest?.inFeedbackWindow) return;
+    if (feedbackSeenStepsRef.current.has(latest.stepCount)) return;
+    feedbackSeenStepsRef.current.add(latest.stepCount);
+
+    const manager = managerRef.current;
+    if (!manager) return;
+
+    const fpaDeg = latest.fpaThisStepDeg;
+    const base = baseFpaDeg;
+    const diff = base == null ? null : fpaDeg - base;
+    let cmd = '';
+    let drv = '';
+    let effect = '';
+
+    if (!isCalibrating && diff != null && connectedRef.current.length > 1) {
+      cmd = getAutoFeedbackCommand(diff);
+      if (cmd) {
+        drv = cmd.startsWith('2') ? 'DRV2' : 'DRV1';
+        effect = String(FEEDBACK_EFFECT);
+      }
+      if (cmd) {
+        void (async () => {
+          try {
+            await sendHaptic(manager, cmd);
+            setHapticStatus(`Auto feedback sent: ${cmd} (diff=${diff.toFixed(2)}°)`);
+          } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            setHapticStatus(`Auto feedback error: ${msg}`);
+          }
+        })();
+      }
+    }
+
+    appendCsvRow({
+      step: latest.stepCount,
+      fpaDeg,
+      diffDeg: diff,
+      drv,
+      effect,
+      sentCommand: cmd,
+    });
+  }, [latest, baseFpaDeg, isCalibrating, sendHaptic, appendCsvRow]);
 
   const feedbackLine = latest?.inFeedbackWindow
     ? `Feedback window: FPA ≈ ${latest.fpaThisStepDeg.toFixed(1)}°`
@@ -304,65 +451,22 @@ export default function FpaScreen() {
               {isCalibrating ? `Calibrating (${calibrationSecondsLeft}s)` : 'Calibrate'}
             </ThemedText>
           </TouchableOpacity>
+          <TouchableOpacity style={stylesThemed.button} onPress={() => void exportCsv()} activeOpacity={0.7}>
+            <ThemedText style={stylesThemed.buttonText}>Export CSV</ThemedText>
+          </TouchableOpacity>
         </View>
+        {csvStatus ? <ThemedText style={stylesThemed.resultText}>{csvStatus}</ThemedText> : null}
 
         <ThemedView style={stylesThemed.result}>
           <ThemedText type="subtitle">Haptics (sender device)</ThemedText>
           <ThemedText style={stylesThemed.muted}>
-            Writes Nordic UART TX (same as BLE console). MCU uses byte 0x61 / 0x62 — send &quot;a&quot;
-            or &quot;b&quot;, or any payload your firmware expects.
+            Writes Nordic UART TX (same as BLE console). LRA firmware expects string commands like
+            &quot;152&quot; or &quot;252&quot; (`drv + effect`). Commands are sent automatically from each
+            detected FPA step using the same threshold logic as `Bluetooth/vqf_processor.py`.
           </ThemedText>
-          <TextInput
-            value={hapticPayload}
-            onChangeText={setHapticPayload}
-            placeholder="Payload (e.g. a or b)"
-            placeholderTextColor={theme.placeholder}
-            style={stylesThemed.input}
-            autoCapitalize="none"
-          />
-          <View style={stylesThemed.buttonRow}>
-            <TouchableOpacity style={stylesThemed.button} onPress={onSendHaptic} activeOpacity={0.7}>
-              <ThemedText style={stylesThemed.buttonText}>Send vibration</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={stylesThemed.button}
-              onPress={() => {
-                setHapticPayload('a');
-                const manager = managerRef.current;
-                if (!manager) return;
-                void (async () => {
-                  try {
-                    await sendHaptic(manager, 'a');
-                    setHapticStatus('Sent pattern: "a" (0x61)');
-                  } catch (e: unknown) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    setHapticStatus(`Send error: ${msg}`);
-                  }
-                })();
-              }}
-              activeOpacity={0.7}>
-              <ThemedText style={stylesThemed.buttonText}>Pattern A</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={stylesThemed.button}
-              onPress={() => {
-                setHapticPayload('b');
-                const manager = managerRef.current;
-                if (!manager) return;
-                void (async () => {
-                  try {
-                    await sendHaptic(manager, 'b');
-                    setHapticStatus('Sent pattern: "b" (0x62)');
-                  } catch (e: unknown) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    setHapticStatus(`Send error: ${msg}`);
-                  }
-                })();
-              }}
-              activeOpacity={0.7}>
-              <ThemedText style={stylesThemed.buttonText}>Pattern B</ThemedText>
-            </TouchableOpacity>
-          </View>
+          <ThemedText style={stylesThemed.resultText}>
+            Auto feedback is always enabled while connected and not calibrating.
+          </ThemedText>
           {hapticStatus ? (
             <ThemedText style={stylesThemed.resultText}>{hapticStatus}</ThemedText>
           ) : null}
@@ -436,16 +540,5 @@ function createStyles(theme: (typeof Colors)['light']) {
     result: { gap: 8, paddingTop: 10 },
     resultText: { fontSize: 15, color: theme.text },
     errorText: { fontSize: 13, color: theme.buttonDestructive },
-    input: {
-      borderRadius: 10,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.border,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      fontSize: 16,
-      minHeight: 44,
-      color: theme.text,
-      backgroundColor: theme.inputBackground,
-    },
   });
 }

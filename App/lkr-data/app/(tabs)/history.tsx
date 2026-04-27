@@ -1,22 +1,21 @@
-import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useIphone13ContentFrame } from '@/hooks/use-iphone13-content-frame';
-
-type SessionSummary = {
-  id: string;
-  startedAt: string;
-  durationMin: number;
-  avgFpa: number;
-  variability: number;
-  steps: number;
-};
+import { deleteSessionSummary, listSessionSummaries, SessionSummaryEntry } from '@/lib/api';
 
 function MiniAreaBars({ data, height = 110 }: { data: number[]; height?: number }) {
+  if (data.length === 0) {
+    return (
+      <View style={[styles.chart, { height }]}>
+        <ThemedText style={styles.emptyChartText}>No sessions yet</ThemedText>
+      </View>
+    );
+  }
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = Math.max(0.0001, max - min);
@@ -43,9 +42,15 @@ function MiniAreaBars({ data, height = 110 }: { data: number[]; height?: number 
   );
 }
 
-function formatDelta(v: number) {
-  const sign = v >= 0 ? '+' : '';
-  return `${sign}${v.toFixed(1)}°`;
+function formatDateLabel(iso: string) {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  return parsed.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 export default function HistoryScreen() {
@@ -53,36 +58,54 @@ export default function HistoryScreen() {
   const theme = Colors[colorScheme];
   const { scrollContentStyle } = useIphone13ContentFrame({ includeTabBarInset: true });
   const stylesThemed = useMemo(() => createStyles(theme), [theme]);
+  const [sessions, setSessions] = useState<SessionSummaryEntry[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
-  const last30Days = useMemo(() => {
-    const base = 6.3;
-    const arr: number[] = [];
-    for (let i = 0; i < 30; i++) {
-      const weekly = Math.sin(i / 4.2) * 0.7;
-      const trend = (i - 15) * 0.03;
-      const jitter = (Math.sin(i * 1.9) + Math.cos(i * 0.6)) * 0.12;
-      arr.push(base + weekly + trend + jitter);
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const items = await listSessionSummaries();
+      setSessions(items);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+    } finally {
+      setLoading(false);
     }
-    return arr;
   }, []);
 
-  const sessions: SessionSummary[] = useMemo(
-    () => [
-      { id: 's1', startedAt: 'Today, 4:12 PM', durationMin: 12, avgFpa: 6.8, variability: 1.1, steps: 1430 },
-      { id: 's2', startedAt: 'Yesterday, 9:03 AM', durationMin: 18, avgFpa: 6.1, variability: 1.4, steps: 2145 },
-      { id: 's3', startedAt: 'Mar 26, 7:41 PM', durationMin: 9, avgFpa: 7.4, variability: 1.7, steps: 990 },
-    ],
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const onDeleteSession = useCallback(
+    async (sessionId: string) => {
+      setDeletingSessionId(sessionId);
+      setError('');
+      try {
+        await deleteSessionSummary(sessionId);
+        setSessions(prev => prev.filter(item => item.session_id !== sessionId));
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(msg);
+      } finally {
+        setDeletingSessionId(null);
+      }
+    },
     [],
   );
 
-  const avg30 = useMemo(() => last30Days.reduce((a, b) => a + b, 0) / last30Days.length, [last30Days]);
-  const deltaWeek = useMemo(() => {
-    const last7 = last30Days.slice(-7);
-    const prev7 = last30Days.slice(-14, -7);
-    const a = last7.reduce((x, y) => x + y, 0) / last7.length;
-    const b = prev7.reduce((x, y) => x + y, 0) / prev7.length;
-    return a - b;
-  }, [last30Days]);
+  const avgAllTime = useMemo(() => {
+    if (sessions.length === 0) return null;
+    return sessions.reduce((sum, item) => sum + item.avg_fpa_deg, 0) / sessions.length;
+  }, [sessions]);
+  const avgFpaBySession = useMemo(
+    () => [...sessions].reverse().map(item => item.avg_fpa_deg),
+    [sessions],
+  );
 
   return (
     <ThemedView style={stylesThemed.container}>
@@ -91,54 +114,77 @@ export default function HistoryScreen() {
 
         <ThemedView style={stylesThemed.kpiRow}>
           <ThemedView style={stylesThemed.kpiCard}>
-            <ThemedText style={stylesThemed.kpiLabel}>30-day avg FPA</ThemedText>
-            <ThemedText style={stylesThemed.kpiValue}>{avg30.toFixed(1)}°</ThemedText>
+            <ThemedText style={stylesThemed.kpiLabel}>All-time avg FPA</ThemedText>
+            <ThemedText style={stylesThemed.kpiValue}>
+              {avgAllTime != null ? `${avgAllTime.toFixed(1)}°` : '—'}
+            </ThemedText>
           </ThemedView>
           <ThemedView style={stylesThemed.kpiCard}>
-            <ThemedText style={stylesThemed.kpiLabel}>Week-over-week</ThemedText>
-            <ThemedText style={stylesThemed.kpiValue}>{formatDelta(deltaWeek)}</ThemedText>
+            <ThemedText style={stylesThemed.kpiLabel}>Saved sessions</ThemedText>
+            <ThemedText style={stylesThemed.kpiValue}>{sessions.length}</ThemedText>
           </ThemedView>
         </ThemedView>
 
         <ThemedView style={stylesThemed.section}>
-          <ThemedText type="subtitle">FPA over last 30 days</ThemedText>
+          <ThemedText type="subtitle">Average FPA across sessions</ThemedText>
           <ThemedView style={stylesThemed.chartCard}>
-            <MiniAreaBars data={last30Days} height={120} />
+            <MiniAreaBars data={avgFpaBySession} height={120} />
             <View style={stylesThemed.chartLegendRow}>
-              <ThemedText style={stylesThemed.muted}>30d ago</ThemedText>
-              <ThemedText style={stylesThemed.muted}>Today</ThemedText>
+              <ThemedText style={stylesThemed.muted}>Oldest</ThemedText>
+              <ThemedText style={stylesThemed.muted}>Newest</ThemedText>
             </View>
           </ThemedView>
         </ThemedView>
 
         <ThemedView style={stylesThemed.section}>
-          <ThemedText type="subtitle">Past sessions</ThemedText>
-          <ThemedText style={stylesThemed.muted}>
-            Mock cards showing previous “active session” summaries.
-          </ThemedText>
+          <View style={stylesThemed.headerRow}>
+            <ThemedText type="subtitle">Past sessions</ThemedText>
+            <TouchableOpacity style={stylesThemed.button} onPress={() => void refresh()} activeOpacity={0.75}>
+              <ThemedText style={stylesThemed.buttonText}>{loading ? 'Refreshing...' : 'Refresh'}</ThemedText>
+            </TouchableOpacity>
+          </View>
+          {error ? <ThemedText style={stylesThemed.errorText}>Could not load history: {error}</ThemedText> : null}
 
           <ThemedView style={stylesThemed.cards}>
             {sessions.map(s => (
-              <ThemedView key={s.id} style={stylesThemed.card}>
-                <ThemedText type="defaultSemiBold">{s.startedAt}</ThemedText>
+              <ThemedView key={s.session_id} style={stylesThemed.card}>
+                <ThemedText type="defaultSemiBold">{formatDateLabel(s.started_at)}</ThemedText>
                 <View style={stylesThemed.cardRow}>
                   <ThemedText style={stylesThemed.cardStat}>Duration</ThemedText>
-                  <ThemedText style={stylesThemed.cardValue}>{s.durationMin} min</ThemedText>
+                  <ThemedText style={stylesThemed.cardValue}>{Math.round(s.duration_sec / 60)} min</ThemedText>
                 </View>
                 <View style={stylesThemed.cardRow}>
                   <ThemedText style={stylesThemed.cardStat}>Avg FPA</ThemedText>
-                  <ThemedText style={stylesThemed.cardValue}>{s.avgFpa.toFixed(1)}°</ThemedText>
+                  <ThemedText style={stylesThemed.cardValue}>{s.avg_fpa_deg.toFixed(1)}°</ThemedText>
                 </View>
                 <View style={stylesThemed.cardRow}>
                   <ThemedText style={stylesThemed.cardStat}>Variability</ThemedText>
-                  <ThemedText style={stylesThemed.cardValue}>{s.variability.toFixed(1)}°</ThemedText>
+                  <ThemedText style={stylesThemed.cardValue}>{s.variability_deg.toFixed(1)}°</ThemedText>
+                </View>
+                <View style={stylesThemed.cardRow}>
+                  <ThemedText style={stylesThemed.cardStat}>Range</ThemedText>
+                  <ThemedText style={stylesThemed.cardValue}>
+                    {s.min_fpa_deg.toFixed(1)}° - {s.max_fpa_deg.toFixed(1)}°
+                  </ThemedText>
                 </View>
                 <View style={stylesThemed.cardRow}>
                   <ThemedText style={stylesThemed.cardStat}>Steps</ThemedText>
-                  <ThemedText style={stylesThemed.cardValue}>{s.steps.toLocaleString()}</ThemedText>
+                  <ThemedText style={stylesThemed.cardValue}>{s.step_count.toLocaleString()}</ThemedText>
                 </View>
+                <TouchableOpacity
+                  style={[stylesThemed.buttonDelete, deletingSessionId === s.session_id && stylesThemed.buttonDisabled]}
+                  disabled={deletingSessionId != null}
+                  onPress={() => void onDeleteSession(s.session_id)}
+                  activeOpacity={0.75}>
+                  <ThemedText style={stylesThemed.buttonDeleteText}>
+                    {deletingSessionId === s.session_id ? 'Deleting...' : 'Delete'}
+                  </ThemedText>
+                </TouchableOpacity>
               </ThemedView>
             ))}
+            {!loading && sessions.length === 0 ? (
+              <ThemedText style={stylesThemed.muted}>No session summaries found in DynamoDB yet.</ThemedText>
+            ) : null}
           </ThemedView>
         </ThemedView>
       </ScrollView>
@@ -157,6 +203,10 @@ const styles = StyleSheet.create({
     width: 8,
     borderRadius: 4,
     backgroundColor: '#2F7EF7',
+  },
+  emptyChartText: {
+    fontSize: 13,
+    color: '#6B7280',
   },
 });
 
@@ -181,6 +231,7 @@ function createStyles(theme: (typeof Colors)['light']) {
     kpiValue: { fontSize: 28, lineHeight: 40, fontWeight: '800', color: theme.text, paddingVertical: 2 },
 
     section: { gap: 10 },
+    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
     chartCard: {
       borderRadius: 14,
       borderWidth: StyleSheet.hairlineWidth,
@@ -204,6 +255,27 @@ function createStyles(theme: (typeof Colors)['light']) {
     cardStat: { fontSize: 13, color: theme.muted },
     cardValue: { fontSize: 13, color: theme.text, fontWeight: '600' },
     muted: { color: theme.muted, fontSize: 13 },
+    button: {
+      paddingHorizontal: 14,
+      minHeight: 36,
+      borderRadius: 10,
+      backgroundColor: theme.buttonPrimary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    buttonDelete: {
+      marginTop: 4,
+      paddingHorizontal: 14,
+      minHeight: 36,
+      borderRadius: 10,
+      backgroundColor: theme.buttonDestructive,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    buttonDisabled: { opacity: 0.55 },
+    buttonText: { color: theme.buttonOnPrimary, fontWeight: '700', fontSize: 13 },
+    buttonDeleteText: { color: theme.buttonOnPrimary, fontWeight: '700', fontSize: 13 },
+    errorText: { color: theme.buttonDestructive, fontSize: 13 },
   });
 }
 

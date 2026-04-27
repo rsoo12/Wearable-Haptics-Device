@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "expo-file-system": "^55.0.16",
+    "expo-sharing": "^55.0.18"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
