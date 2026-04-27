@@ -1,10 +1,10 @@
 # lkr-data backend (AWS SAM)
 
-This is a minimal backend for the mobile app:
+This is the backend for the mobile app:
 
-- API Gateway `POST /process`
-- Lambda runs gait/FPA processing and exposes key summary updates
-- Lambda is packaged as a container image so NumPy/SciPy/transforms3d work reliably
+- API Gateway `POST /session-summary` to calculate session statistics and save one DynamoDB item
+- API Gateway `GET /session-summaries` to return saved session cards for app history
+- Lambda is zip-deployed (no additional Python libraries required)
 
 ## Prereqs
 
@@ -20,23 +20,44 @@ sam build
 sam deploy --guided
 ```
 
-Notes:
-- `sam deploy --guided` will ask for an ECR repo for the Lambda image.
-- Container image build uses `backend/Dockerfile`.
-
 After deploy, SAM prints an output named `ApiBaseUrl` like:
 
 `https://abc123.execute-api.us-east-1.amazonaws.com/prod`
 
-## Test
+## Endpoints
+
+Save one finished session (Lambda computes stats + writes DynamoDB):
 
 ```bash
-curl -X POST "$(sam list stack-outputs --stack-name <YOUR_STACK_NAME> --output json | jq -r '.[] | select(.OutputKey=="ApiBaseUrl") | .OutputValue')/process" \
+curl -X POST "<API_BASE_URL>/session-summary" \
   -H "content-type: application/json" \
-  -d '{"session_id":"session-1","payload_b64":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","rate_hz":180}'
+  -d '{
+    "session_id":"session-1714262229123",
+    "started_at":"2026-04-26T18:12:12.123Z",
+    "ended_at":"2026-04-26T18:24:12.123Z",
+    "csv_data":"time_iso,step_num,rate_hz,fpa_deg,fpa_minus_base_deg,drv,effect,sent_cmd,ax_m_s2,ay_m_s2,az_m_s2,gx_deg_s,gy_deg_s,gz_deg_s\n2026-04-26T18:12:13.100Z,1,174.2,6.1,0.3,,,,0,0,0,0,0,0\n2026-04-26T18:12:13.600Z,2,177.9,6.4,0.6,,,,0,0,0,0,0,0\n"
+  }'
 ```
 
-Response includes:
-- `key_summary_updated`: `true` when a new summary step is reached
-- `key_summary`: latest summary payload (`step`, `fpa_deg`, `rate_hz`, `print_message`)
+Load all summaries for History tab:
+
+```bash
+curl "<API_BASE_URL>/session-summaries"
+```
+
+Delete session(s) and return recalculated aggregate stats:
+
+```bash
+curl -X DELETE "<API_BASE_URL>/session-summary" \
+  -H "content-type: application/json" \
+  -d '{"session_id":"session-1714262229123"}'
+```
+
+You can also pass a list:
+
+```bash
+curl -X DELETE "<API_BASE_URL>/session-summary" \
+  -H "content-type: application/json" \
+  -d '{"session_ids":["session-a","session-b"]}'
+```
 

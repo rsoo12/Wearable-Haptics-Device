@@ -10,6 +10,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useWearableFpaPipeline } from '@/hooks/use-wearable-fpa-pipeline';
 import { useWearableHapticsWriter } from '@/hooks/use-wearable-haptics-writer';
 import { useIphone13ContentFrame } from '@/hooks/use-iphone13-content-frame';
+import { createSessionSummary } from '@/lib/api';
 import { getStoredBaseFpaDeg, setStoredBaseFpaDeg } from '@/lib/wearable/fpaRunCounter';
 import {
   assignReceiverAndSenderDevices,
@@ -25,6 +26,22 @@ const FEEDBACK_EFFECT = 52;
 const FEEDBACK_TOE_IN_THRESHOLD_DEG = -12;
 const FEEDBACK_TOE_OUT_THRESHOLD_DEG = -8;
 const MAX_CHART_POINTS = 64;
+const CSV_HEADER = [
+  'time_iso',
+  'step_num',
+  'rate_hz',
+  'fpa_deg',
+  'fpa_minus_base_deg',
+  'drv',
+  'effect',
+  'sent_cmd',
+  'ax_m_s2',
+  'ay_m_s2',
+  'az_m_s2',
+  'gx_deg_s',
+  'gy_deg_s',
+  'gz_deg_s',
+].join(',');
 
 function formatMinutes(totalSeconds: number) {
   const m = Math.floor(totalSeconds / 60);
@@ -106,6 +123,7 @@ export default function ActiveSessionScreen() {
   const [elapsedSec, setElapsedSec] = useState<number>(0);
   const [isSessionRunning, setIsSessionRunning] = useState<boolean>(false);
   const [fpaSeries, setFpaSeries] = useState<number[]>([]);
+  const [backendStatus, setBackendStatus] = useState<string>('');
 
   const managerRef = useRef<BleManager | null>(null);
   const connectedRef = useRef<Device[]>([]);
@@ -196,9 +214,9 @@ export default function ActiveSessionScreen() {
     feedbackSeenStepsRef.current = new Set();
   };
 
-  const connectAndStart = async (devices: Device[]) => {
+  const connectAndStart = async (devices: Device[]): Promise<boolean> => {
     const manager = managerRef.current;
-    if (!manager) return;
+    if (!manager) return false;
     try {
       stopScan();
       const connected = await connectNordicDevices(manager, devices);
@@ -226,16 +244,18 @@ export default function ActiveSessionScreen() {
       startedAtRef.current = Date.now();
       setElapsedSec(0);
       setIsSessionRunning(true);
+      return true;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
       setStatus('error');
+      return false;
     }
   };
 
-  const startAutoScan = async () => {
+  const startAutoScan = async (): Promise<boolean> => {
     const manager = managerRef.current;
-    if (!manager) return;
+    if (!manager) return false;
     try {
       setStatus('scanning');
       setError('');
@@ -250,13 +270,14 @@ export default function ActiveSessionScreen() {
         setSenderLabel('—');
         setError(`No BLE devices found with name prefix "${DEVICE_NAME_PREFIX}".`);
         setStatus('error');
-        return;
+        return false;
       }
-      await connectAndStart(matches);
+      return await connectAndStart(matches);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
       setStatus('error');
+      return false;
     }
   };
 
@@ -293,23 +314,7 @@ export default function ActiveSessionScreen() {
         setCsvStatus('No rows to export yet. Walk a few steps first.');
         return;
       }
-      const header = [
-        'time_iso',
-        'step_num',
-        'rate_hz',
-        'fpa_deg',
-        'fpa_minus_base_deg',
-        'drv',
-        'effect',
-        'sent_cmd',
-        'ax_m_s2',
-        'ay_m_s2',
-        'az_m_s2',
-        'gx_deg_s',
-        'gy_deg_s',
-        'gz_deg_s',
-      ].join(',');
-      const csv = `${header}\n${csvRowsRef.current.join('\n')}\n`;
+      const csv = `${CSV_HEADER}\n${csvRowsRef.current.join('\n')}\n`;
       const filename = `fpa_log_${Date.now()}.csv`;
       const targetDir = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
       if (!targetDir) {
@@ -343,11 +348,50 @@ export default function ActiveSessionScreen() {
     })();
   };
 
+  const onCalibrate = () => {
+    void (async () => {
+      if (isCalibrating) return;
+      if (connectedRef.current.length === 0) {
+        setCalibrationStatus('Connecting devices before calibration...');
+        const connected = await startAutoScan();
+        if (!connected) {
+          setCalibrationStatus('Calibration canceled: could not connect devices.');
+          return;
+        }
+      }
+      startCalibration();
+    })();
+  };
+
   const onDisconnect = () => {
     void (async () => {
+      const snapshot = {
+        startedAt: new Date(startedAtRef.current).toISOString(),
+        endedAt: new Date().toISOString(),
+        csvRows: [...csvRowsRef.current],
+      };
       await disconnect();
       resetPipeline();
       setStatus('idle');
+      if (snapshot.csvRows.length === 0) {
+        setBackendStatus('Session stopped. No FPA points were available to upload.');
+        return;
+      }
+      setBackendStatus('Session stopped. Saving summary to AWS...');
+      try {
+        const saved = await createSessionSummary({
+          session_id: `session-${startedAtRef.current}`,
+          started_at: snapshot.startedAt,
+          ended_at: snapshot.endedAt,
+          csv_data: `${CSV_HEADER}\n${snapshot.csvRows.join('\n')}\n`,
+        });
+        setBackendStatus(
+          `Saved to DynamoDB: ${saved.avg_fpa_deg.toFixed(1)}° avg over ${saved.duration_sec}s.`,
+        );
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setBackendStatus(`AWS summary upload failed: ${msg}`);
+      }
     })();
   };
 
@@ -507,7 +551,7 @@ export default function ActiveSessionScreen() {
             <TouchableOpacity
               style={[stylesThemed.button, isCalibrating && stylesThemed.buttonDisabled]}
               disabled={isCalibrating}
-              onPress={startCalibration}
+              onPress={onCalibrate}
               activeOpacity={0.75}>
               <ThemedText style={stylesThemed.buttonText}>
                 {isCalibrating ? `Calibrating (${calibrationSecondsLeft}s)` : 'Calibrate'}
@@ -521,6 +565,7 @@ export default function ActiveSessionScreen() {
         {calibrationStatus ? <ThemedText style={stylesThemed.muted}>{calibrationStatus}</ThemedText> : null}
         {hapticStatus ? <ThemedText style={stylesThemed.muted}>{hapticStatus}</ThemedText> : null}
         {csvStatus ? <ThemedText style={stylesThemed.muted}>{csvStatus}</ThemedText> : null}
+        {backendStatus ? <ThemedText style={stylesThemed.muted}>{backendStatus}</ThemedText> : null}
       </ScrollView>
     </ThemedView>
   );

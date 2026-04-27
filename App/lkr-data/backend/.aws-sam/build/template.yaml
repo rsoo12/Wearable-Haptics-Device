@@ -1,79 +1,86 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Session summary API backend for lkr-data app
-
 Resources:
   HelloApi:
     Type: AWS::Serverless::Api
     Properties:
       StageName: prod
       Cors:
-        AllowMethods: "'GET,POST,DELETE,OPTIONS'"
-        AllowHeaders: "'content-type,accept'"
-        AllowOrigin: "'*'"
-
+        AllowMethods: '''GET,POST,DELETE,OPTIONS'''
+        AllowHeaders: '''content-type,accept'''
+        AllowOrigin: '''*'''
   SessionSummariesTable:
     Type: AWS::DynamoDB::Table
     Properties:
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
-        - AttributeName: session_id
-          AttributeType: S
+      - AttributeName: session_id
+        AttributeType: S
       KeySchema:
-        - AttributeName: session_id
-          KeyType: HASH
-
+      - AttributeName: session_id
+        KeyType: HASH
   SessionSummaryFunction:
     Type: AWS::Serverless::Function
     Properties:
       Runtime: python3.12
       Handler: session_summary_api.session_summary_api_handler
-      CodeUri: src/
+      CodeUri: SessionSummaryFunction
       MemorySize: 512
       Timeout: 10
       Environment:
         Variables:
-          SESSION_TABLE_NAME: !Ref SessionSummariesTable
+          SESSION_TABLE_NAME:
+            Ref: SessionSummariesTable
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref SessionSummariesTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: SessionSummariesTable
       Events:
         SessionSummaryPost:
           Type: Api
           Properties:
-            RestApiId: !Ref HelloApi
+            RestApiId:
+              Ref: HelloApi
             Path: /session-summary
             Method: POST
         SessionSummariesGet:
           Type: Api
           Properties:
-            RestApiId: !Ref HelloApi
+            RestApiId:
+              Ref: HelloApi
             Path: /session-summaries
             Method: GET
-
+    Metadata:
+      SamResourceId: SessionSummaryFunction
   SessionAdminFunction:
     Type: AWS::Serverless::Function
     Properties:
       Runtime: python3.12
       Handler: session_admin_api.session_admin_api_handler
-      CodeUri: src/
+      CodeUri: SessionAdminFunction
       MemorySize: 512
       Timeout: 10
       Environment:
         Variables:
-          SESSION_TABLE_NAME: !Ref SessionSummariesTable
+          SESSION_TABLE_NAME:
+            Ref: SessionSummariesTable
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref SessionSummariesTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: SessionSummariesTable
       Events:
         SessionSummaryDelete:
           Type: Api
           Properties:
-            RestApiId: !Ref HelloApi
+            RestApiId:
+              Ref: HelloApi
             Path: /session-summary
             Method: DELETE
-
+    Metadata:
+      SamResourceId: SessionAdminFunction
 Outputs:
   ApiBaseUrl:
     Description: Base URL for the API (prod stage)
-    Value: !Sub "https://${HelloApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+    Value:
+      Fn::Sub: https://${HelloApi}.execute-api.${AWS::Region}.amazonaws.com/prod
