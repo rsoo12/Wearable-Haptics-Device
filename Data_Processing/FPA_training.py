@@ -78,11 +78,13 @@ for label, mocap_file, imu_file in TRIALS:
     mocap_event_r = ge_from_heel_height(data_mocap, 'right', fs=MOCAP_FS)
     fpa_mocap_r   = fpa_mocap.get_fpa_stance(fpa_mocap.get_fpa(data_mocap, 'right'), mocap_event_r)
     imu_device_fpa = load_imu_fpa(imu_file)
+    fpa_mocap_r    = fpa_mocap_r[2:-1]
+    imu_device_fpa = imu_device_fpa[2:-1]
     offset         = np.mean(imu_device_fpa) - np.mean(fpa_mocap_r)
     imu_corr       = imu_device_fpa - offset
     trial_data.append((label, fpa_mocap_r, imu_device_fpa, imu_corr))
 
-global_ylim = [-30, 10]
+global_ylim = [-80, 80]
 
 # ============================================================
 # PASS 2 — plot each trial with shared y axis
@@ -94,7 +96,7 @@ for entry in trial_data:
     label, fpa_mocap_r, imu_device_fpa, imu_corr = entry
     print(f'\n=== {label} ===')
 
-    n_steps = min(len(fpa_mocap_r), len(imu_device_fpa), 120)
+    n_steps = min(len(fpa_mocap_r), len(imu_device_fpa))
     rmse_raw  = np.sqrt(np.mean((imu_device_fpa[:n_steps] - fpa_mocap_r[:n_steps]) ** 2))
     rmse_corr = np.sqrt(np.mean((imu_corr[:n_steps]       - fpa_mocap_r[:n_steps]) ** 2))
 
@@ -134,7 +136,6 @@ for entry in trial_data:
     ax1.set_title(f'FPA per step  |  RMSE = {rmse_corr:.2f}°')
     ax1.set_xlabel('Step number')
     ax1.set_ylabel('FPA (deg)')
-    ax1.set_xlim([0, 120])
     ax1.set_ylim(global_ylim)
     ax1.legend(fontsize=8)
 

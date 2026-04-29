@@ -72,6 +72,8 @@ for label, mocap_file, imu_file in TRIALS:
     mocap_event_r = ge_from_heel_height(data_mocap, 'right', fs=MOCAP_FS)
     fpa_mocap_r   = fpa_mocap.get_fpa_stance(fpa_mocap.get_fpa(data_mocap, 'right'), mocap_event_r)
     imu_device_fpa = load_imu_fpa(imu_file)
+    fpa_mocap_r    = fpa_mocap_r[2:-1]
+    imu_device_fpa = imu_device_fpa[2:-1]
     offset         = np.mean(imu_device_fpa) - np.mean(fpa_mocap_r)
     imu_corr       = imu_device_fpa - offset
     trial_data.append((label, fpa_mocap_r, imu_device_fpa, imu_corr))
