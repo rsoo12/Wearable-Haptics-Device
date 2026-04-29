@@ -82,7 +82,7 @@ for label, mocap_file, imu_file in TRIALS:
     imu_corr       = imu_device_fpa - offset
     trial_data.append((label, fpa_mocap_r, imu_device_fpa, imu_corr))
 
-global_ylim = [-25, 25]
+global_ylim = [-30, 10]
 
 # ============================================================
 # PASS 2 — plot each trial with shared y axis
