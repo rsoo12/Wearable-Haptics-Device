@@ -94,7 +94,7 @@ for entry in trial_data:
     label, fpa_mocap_r, imu_device_fpa, imu_corr = entry
     print(f'\n=== {label} ===')
 
-    n_steps = min(len(fpa_mocap_r), len(imu_device_fpa))
+    n_steps = min(len(fpa_mocap_r), len(imu_device_fpa), 120)
     rmse_raw  = np.sqrt(np.mean((imu_device_fpa[:n_steps] - fpa_mocap_r[:n_steps]) ** 2))
     rmse_corr = np.sqrt(np.mean((imu_corr[:n_steps]       - fpa_mocap_r[:n_steps]) ** 2))
 
@@ -134,6 +134,7 @@ for entry in trial_data:
     ax1.set_title(f'FPA per step  |  RMSE = {rmse_corr:.2f}°')
     ax1.set_xlabel('Step number')
     ax1.set_ylabel('FPA (deg)')
+    ax1.set_xlim([0, 120])
     ax1.set_ylim(global_ylim)
     ax1.legend(fontsize=8)
 
