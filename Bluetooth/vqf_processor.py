@@ -32,10 +32,10 @@ CALIBRATION_DURATION = 60  # seconds
 def lra_feedback(diff, cmd_queue: asyncio.Queue):
     # Positive diff → FPA below baseline (toe-in) → drv2
     # Negative diff → FPA above baseline (toe-out) → drv1
-    if diff < -12:
-        drv = 2 #right
-    elif diff > -8:
+    if diff > -8:
         drv = 1 #left
+    elif diff < -12:
+        drv = 2 #right
     else:
         return None  # within threshold, no feedback
 
@@ -45,7 +45,7 @@ def lra_feedback(diff, cmd_queue: asyncio.Queue):
     #     drv = 1 #left
     # else:
     #     return None 
-    direction = "toe-in (drv2)" if drv == 2 else "toe-out (drv1)"
+    direction = "move toe in (drv2)" if drv == 1 else "move toe-out (drv1)"
     cmd = f"{drv}52"
     print(f"[LRA Feedback] diff={diff:.2f} deg → {direction} → cmd='{cmd}'")
     cmd_queue.put_nowait(cmd)
@@ -162,7 +162,7 @@ async def main():
         if name == "CIRCUITPY4f33":
             imu_mcu = addr
             print("Assigned imu_mcu address")
-        elif name == "CIRCUITPY9391":
+        elif name == "CIRCUITPY174d":
             lra_mcu = addr
             print("Assigned lra_mcu address")
 
