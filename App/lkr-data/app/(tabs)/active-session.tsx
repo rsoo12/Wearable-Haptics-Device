@@ -48,8 +48,8 @@ function formatMinutes(totalSeconds: number) {
 }
 
 function getAutoFeedbackCommand(diffDeg: number): string {
-  if (diffDeg < FEEDBACK_TOE_IN_THRESHOLD_DEG) return `3${FEEDBACK_EFFECT}`;
-  if (diffDeg > FEEDBACK_TOE_OUT_THRESHOLD_DEG) return `0${FEEDBACK_EFFECT}`;
+  if (diffDeg < FEEDBACK_TOE_IN_THRESHOLD_DEG) return `2${FEEDBACK_EFFECT}`;
+  if (diffDeg > FEEDBACK_TOE_OUT_THRESHOLD_DEG) return `1${FEEDBACK_EFFECT}`;
   return '';
 }
 
@@ -275,7 +275,7 @@ export default function ActiveSessionScreen() {
       lastFeedbackFpaUpdateCountRef.current = 0;
       csvRowsRef.current = [];
       setFpaSeries([]);
-      configureSender(sender.device);
+      configureSender(sender.device, sender.rxServiceUUID);
       await startPipeline(receiver.device);
       setStatus('connected');
       startedAtRef.current = Date.now();

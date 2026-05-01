@@ -33,8 +33,8 @@ const FEEDBACK_TOE_OUT_THRESHOLD_DEG = -8;
 
 function getAutoFeedbackCommand(diffDeg: number): string {
   // Match Bluetooth/vqf_processor.py lra_feedback() thresholds and command mapping.
-  if (diffDeg < FEEDBACK_TOE_IN_THRESHOLD_DEG) return `3${FEEDBACK_EFFECT}`;
-  if (diffDeg > FEEDBACK_TOE_OUT_THRESHOLD_DEG) return `0${FEEDBACK_EFFECT}`;
+  if (diffDeg < FEEDBACK_TOE_IN_THRESHOLD_DEG) return `2${FEEDBACK_EFFECT}`;
+  if (diffDeg > FEEDBACK_TOE_OUT_THRESHOLD_DEG) return `1${FEEDBACK_EFFECT}`;
   return '';
 }
 
@@ -183,7 +183,7 @@ export default function FpaScreen() {
       resetHapticsWriter();
       feedbackSeenStepsRef.current = new Set();
       csvRowsRef.current = [];
-      configureSender(sender.device);
+      configureSender(sender.device, sender.rxServiceUUID);
       await startPipeline(receiver.device);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
