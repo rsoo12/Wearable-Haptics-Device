@@ -23,19 +23,18 @@ import {
   connectNordicDevices,
   DEVICE_NAME_PREFIX,
   findNordicDevices,
-  labelDevice,
 } from '@/lib/wearable';
 
-const CALIBRATION_DURATION_SEC = 30;
+const CALIBRATION_DURATION_SEC = 60;
 const CALIBRATION_IGNORE_INITIAL_STEPS = 7;
-const FEEDBACK_EFFECT = 52;
+const FEEDBACK_EFFECT = 12;
 const FEEDBACK_TOE_IN_THRESHOLD_DEG = -12;
 const FEEDBACK_TOE_OUT_THRESHOLD_DEG = -8;
 
 function getAutoFeedbackCommand(diffDeg: number): string {
   // Match Bluetooth/vqf_processor.py lra_feedback() thresholds and command mapping.
-  if (diffDeg < FEEDBACK_TOE_IN_THRESHOLD_DEG) return `2${FEEDBACK_EFFECT}`;
-  if (diffDeg > FEEDBACK_TOE_OUT_THRESHOLD_DEG) return `1${FEEDBACK_EFFECT}`;
+  if (diffDeg < FEEDBACK_TOE_IN_THRESHOLD_DEG) return `3${FEEDBACK_EFFECT}`;
+  if (diffDeg > FEEDBACK_TOE_OUT_THRESHOLD_DEG) return `0${FEEDBACK_EFFECT}`;
   return '';
 }
 
@@ -113,10 +112,9 @@ export default function FpaScreen() {
 
     calibrationValuesRef.current = [];
     calibrationSeenStepsRef.current = new Set();
-    setCalibrationStatus('Calibrating for 30 seconds. Walk naturally.');
+    setCalibrationStatus(`Calibrating for ${CALIBRATION_DURATION_SEC} seconds. Walk naturally.`);
     setIsCalibrating(true);
     setCalibrationSecondsLeft(CALIBRATION_DURATION_SEC);
-
     clearCalibrationTimers();
     calibrationIntervalRef.current = setInterval(() => {
       setCalibrationSecondsLeft(prev => Math.max(0, prev - 1));
@@ -156,7 +154,7 @@ export default function FpaScreen() {
     if (!manager) return;
     try {
       stopScan();
-      // 1) Broadly scan and attempt connection to all CIRCUITPY matches first.
+      // 1) Broadly scan and attempt connection to all matching peripherals first.
       const connected = await connectNordicDevices(manager, devices);
       if (connected.length === 0) {
         throw new Error('Found matching devices, but could not connect to any of them.');
@@ -166,14 +164,14 @@ export default function FpaScreen() {
       const { receiver, sender } = assignReceiverAndSenderDevices(connected);
       if (!sender) {
         throw new Error(
-          'Found only one CIRCUITPY device. Need both IMU (RX) and LRA (TX) devices to run dual pipelines.',
+          'Found only one device. Need both receiver (Shank) and transmitter (Foot) devices to run dual pipelines.',
         );
       }
 
       connectedRef.current = connected.map(item => item.device);
       setConnectedCount(connected.length);
-      setReceiverLabel(labelDevice(receiver.device));
-      setSenderLabel(labelDevice(sender.device));
+      setReceiverLabel('Shank');
+      setSenderLabel('Foot');
       setStatus('connected');
       setError('');
       setCsvStatus('');
@@ -378,7 +376,7 @@ export default function FpaScreen() {
     if (!isCalibrating && diff != null && connectedRef.current.length > 1) {
       cmd = getAutoFeedbackCommand(diff);
       if (cmd) {
-        drv = cmd.startsWith('2') ? 'DRV2' : 'DRV1';
+        drv = cmd.startsWith('3') ? 'DRV3' : 'DRV0';
         effect = String(FEEDBACK_EFFECT);
       }
       if (cmd) {
@@ -419,16 +417,15 @@ export default function FpaScreen() {
 
         <ThemedText style={stylesThemed.muted}>
           On-device step count and foot progression angle — same pipeline as Bluetooth/vqf_processor.py
-          (no cloud). With two peripherals, the lower BLE id is the FPA (RX) unit; the other is the
-          haptics (TX) unit.
+          (no cloud). The receiver is labeled Shank and the transmitter is labeled Foot.
         </ThemedText>
 
         <ThemedView style={stylesThemed.result}>
           <ThemedText type="subtitle">Connection</ThemedText>
           <ThemedText style={stylesThemed.resultText}>Status: {status}</ThemedText>
           <ThemedText style={stylesThemed.resultText}>Connected devices: {connectedCount}</ThemedText>
-          <ThemedText style={stylesThemed.resultText}>FPA / stream (RX): {receiverLabel}</ThemedText>
-          <ThemedText style={stylesThemed.resultText}>Haptics (TX): {senderLabel}</ThemedText>
+          <ThemedText style={stylesThemed.resultText}>Receiver (Shank): {receiverLabel}</ThemedText>
+          <ThemedText style={stylesThemed.resultText}>Transmitter (Foot): {senderLabel}</ThemedText>
         </ThemedView>
 
         <View style={stylesThemed.buttonRow}>
@@ -458,10 +455,10 @@ export default function FpaScreen() {
         {csvStatus ? <ThemedText style={stylesThemed.resultText}>{csvStatus}</ThemedText> : null}
 
         <ThemedView style={stylesThemed.result}>
-          <ThemedText type="subtitle">Haptics (sender device)</ThemedText>
+          <ThemedText type="subtitle">Haptics (transmitter / Foot)</ThemedText>
           <ThemedText style={stylesThemed.muted}>
             Writes Nordic UART TX (same as BLE console). LRA firmware expects string commands like
-            &quot;152&quot; or &quot;252&quot; (`drv + effect`). Commands are sent automatically from each
+            &quot;112&quot; or &quot;212&quot; (`drv + effect`). Commands are sent automatically from each
             detected FPA step using the same threshold logic as `Bluetooth/vqf_processor.py`.
           </ThemedText>
           <ThemedText style={stylesThemed.resultText}>

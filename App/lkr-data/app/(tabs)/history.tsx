@@ -9,6 +9,7 @@ import { useIphone13ContentFrame } from '@/hooks/use-iphone13-content-frame';
 import { deleteSessionSummary, listSessionSummaries, SessionSummaryEntry } from '@/lib/api';
 
 function MiniAreaBars({ data, height = 110 }: { data: number[]; height?: number }) {
+  const [chartWidth, setChartWidth] = useState<number>(0);
   if (data.length === 0) {
     return (
       <View style={[styles.chart, { height }]}>
@@ -19,25 +20,57 @@ function MiniAreaBars({ data, height = 110 }: { data: number[]; height?: number 
   const min = Math.min(...data);
   const max = Math.max(...data);
   const range = Math.max(0.0001, max - min);
+  const chartInnerHeight = Math.max(8, height - 10);
+  const points = data.map((value, index) => {
+    const pct = Math.max(0, Math.min(1, (value - min) / range));
+    const x = data.length <= 1 ? 0 : (index / (data.length - 1)) * chartWidth;
+    const y = Math.max(0, Math.min(height - 1, height - 1 - pct * chartInnerHeight));
+    return { x, y, pct };
+  });
 
   return (
-    <View style={[styles.chart, { height }]}>
-      {data.map((v, i) => {
-        const pct = (v - min) / range;
-        const h = Math.max(2, Math.round(pct * (height - 12)));
-        return (
-          <View
-            key={`${i}-${v}`}
-            style={[
-              styles.bar,
-              {
-                height: h,
-                opacity: 0.25 + 0.75 * pct,
-              },
-            ]}
-          />
-        );
-      })}
+    <View
+      style={[styles.chart, { height }]}
+      onLayout={event => setChartWidth(event.nativeEvent.layout.width)}>
+      {chartWidth > 0
+        ? points.slice(1).map((point, index) => {
+            const prev = points[index];
+            const dx = point.x - prev.x;
+            const dy = point.y - prev.y;
+            const steps = Math.max(1, Math.round(Math.sqrt(dx * dx + dy * dy) / 4));
+            return Array.from({ length: steps }, (_, stepIndex) => {
+              const t = stepIndex / steps;
+              return (
+                <View
+                  key={`line-${index}-${stepIndex}`}
+                  pointerEvents="none"
+                  style={[
+                    styles.linePoint,
+                    {
+                      left: prev.x + dx * t - 1.5,
+                      top: prev.y + dy * t - 1.5,
+                      opacity: 0.45 + 0.5 * Math.max(prev.pct, point.pct),
+                    },
+                  ]}
+                />
+              );
+            });
+          })
+        : null}
+      {points.map((point, index) => (
+        <View
+          key={`point-${index}`}
+          pointerEvents="none"
+          style={[
+            styles.point,
+            {
+              left: point.x - 3,
+              top: point.y - 3,
+              opacity: 0.55 + 0.45 * point.pct,
+            },
+          ]}
+        />
+      ))}
     </View>
   );
 }
@@ -106,6 +139,8 @@ export default function HistoryScreen() {
     () => [...sessions].reverse().map(item => item.avg_fpa_deg),
     [sessions],
   );
+  const chartMeasuredMin = avgFpaBySession.length > 0 ? Math.min(...avgFpaBySession) : null;
+  const chartMeasuredMax = avgFpaBySession.length > 0 ? Math.max(...avgFpaBySession) : null;
 
   return (
     <ThemedView style={stylesThemed.container}>
@@ -128,7 +163,20 @@ export default function HistoryScreen() {
         <ThemedView style={stylesThemed.section}>
           <ThemedText type="subtitle">Average FPA across sessions</ThemedText>
           <ThemedView style={stylesThemed.chartCard}>
-            <MiniAreaBars data={avgFpaBySession} height={120} />
+            <View style={stylesThemed.chartPlotRow}>
+              <View style={stylesThemed.chartRangeColumn}>
+                <ThemedText style={stylesThemed.chartRangeText}>
+                  {chartMeasuredMax != null ? `${chartMeasuredMax.toFixed(1)}°` : '—'}
+                </ThemedText>
+                <View style={stylesThemed.chartRangeStem} />
+                <ThemedText style={stylesThemed.chartRangeText}>
+                  {chartMeasuredMin != null ? `${chartMeasuredMin.toFixed(1)}°` : '—'}
+                </ThemedText>
+              </View>
+              <View style={stylesThemed.chartPlotMain}>
+                <MiniAreaBars data={avgFpaBySession} height={120} />
+              </View>
+            </View>
             <View style={stylesThemed.chartLegendRow}>
               <ThemedText style={stylesThemed.muted}>Oldest</ThemedText>
               <ThemedText style={stylesThemed.muted}>Newest</ThemedText>
@@ -194,14 +242,21 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   chart: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 2,
+    position: 'relative',
     overflow: 'hidden',
   },
-  bar: {
-    width: 8,
-    borderRadius: 4,
+  linePoint: {
+    position: 'absolute',
+    width: 3,
+    height: 3,
+    borderRadius: 99,
+    backgroundColor: '#2F7EF7',
+  },
+  point: {
+    position: 'absolute',
+    width: 6,
+    height: 6,
+    borderRadius: 99,
     backgroundColor: '#2F7EF7',
   },
   emptyChartText: {
@@ -240,6 +295,23 @@ function createStyles(theme: (typeof Colors)['light']) {
       padding: 12,
       gap: 8,
     },
+    chartPlotRow: { flexDirection: 'row', alignItems: 'stretch', gap: 0 },
+    chartRangeColumn: {
+      width: 42,
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      paddingVertical: 2,
+      gap: 6,
+    },
+    chartRangeText: { color: theme.muted, fontSize: 12 },
+    chartRangeStem: {
+      width: 2,
+      flex: 1,
+      borderRadius: 99,
+      backgroundColor: theme.border,
+      marginVertical: 2,
+    },
+    chartPlotMain: { flex: 1, justifyContent: 'flex-end' },
     chartLegendRow: { flexDirection: 'row', justifyContent: 'space-between' },
 
     cards: { gap: 10 },

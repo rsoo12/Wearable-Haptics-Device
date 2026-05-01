@@ -17,15 +17,13 @@ import {
   connectNordicDevices,
   DEVICE_NAME_PREFIX,
   findNordicDevices,
-  labelDevice,
 } from '@/lib/wearable';
 
-const CALIBRATION_DURATION_SEC = 30;
+const CALIBRATION_DURATION_SEC = 60;
 const CALIBRATION_IGNORE_INITIAL_STEPS = 7;
-const FEEDBACK_EFFECT = 52;
-const FEEDBACK_TOE_IN_THRESHOLD_DEG = -12;
-const FEEDBACK_TOE_OUT_THRESHOLD_DEG = -8;
-const MAX_CHART_POINTS = 64;
+const FEEDBACK_EFFECT = 12;
+const FEEDBACK_TOE_IN_THRESHOLD_DEG = -9;
+const FEEDBACK_TOE_OUT_THRESHOLD_DEG = -1;
 const CSV_HEADER = [
   'time_iso',
   'step_num',
@@ -50,8 +48,8 @@ function formatMinutes(totalSeconds: number) {
 }
 
 function getAutoFeedbackCommand(diffDeg: number): string {
-  if (diffDeg < FEEDBACK_TOE_IN_THRESHOLD_DEG) return `2${FEEDBACK_EFFECT}`;
-  if (diffDeg > FEEDBACK_TOE_OUT_THRESHOLD_DEG) return `1${FEEDBACK_EFFECT}`;
+  if (diffDeg < FEEDBACK_TOE_IN_THRESHOLD_DEG) return `3${FEEDBACK_EFFECT}`;
+  if (diffDeg > FEEDBACK_TOE_OUT_THRESHOLD_DEG) return `0${FEEDBACK_EFFECT}`;
   return '';
 }
 
@@ -63,11 +61,14 @@ function MiniBarChart({
   data,
   height = 84,
   barWidth = 6,
+  baseLineDeg = null,
 }: {
   data: number[];
   height?: number;
   barWidth?: number;
+  baseLineDeg?: number | null;
 }) {
+  const chartScrollRef = useRef<ScrollView | null>(null);
   if (data.length === 0) {
     return (
       <View style={[styles.chart, { height }]}>
@@ -75,30 +76,64 @@ function MiniBarChart({
       </View>
     );
   }
-  const min = Math.min(...data);
-  const max = Math.max(...data);
+  const targetDeg =
+    baseLineDeg == null ? null : baseLineDeg + (FEEDBACK_TOE_IN_THRESHOLD_DEG + FEEDBACK_TOE_OUT_THRESHOLD_DEG) / 2;
+  const min = Math.min(...data, ...(targetDeg == null ? [] : [targetDeg]));
+  const max = Math.max(...data, ...(targetDeg == null ? [] : [targetDeg]));
   const range = Math.max(0.0001, max - min);
+  const chartPaddingY = 4;
+  const chartInnerHeight = Math.max(8, height - chartPaddingY * 2);
+  const chartWidth = Math.max(barWidth, data.length * barWidth);
+  const targetPct = targetDeg == null ? null : clamp((targetDeg - min) / range, 0, 1);
+  const targetLineTop =
+    targetPct == null ? null : Math.max(0, chartPaddingY + chartInnerHeight - Math.round(targetPct * chartInnerHeight));
+  const bars = data.map((value, index) => {
+    const pct = clamp((value - min) / range, 0, 1);
+    const x = index * barWidth;
+    const y = Math.max(0, Math.min(height - 1, chartPaddingY + chartInnerHeight - pct * chartInnerHeight));
+    const topAnchor = targetLineTop == null ? y : Math.min(y, targetLineTop);
+    const barHeight = targetLineTop == null ? Math.max(2, height - y) : Math.max(2, Math.abs(y - targetLineTop));
+    return { x, pct, topAnchor, barHeight };
+  });
 
   return (
-    <View style={[styles.chart, { height }]}>
-      {data.map((v, i) => {
-        const pct = (v - min) / range;
-        const h = Math.max(2, Math.round(pct * (height - 10)));
-        return (
+    <ScrollView
+      horizontal
+      ref={chartScrollRef}
+      style={styles.chartScroll}
+      showsHorizontalScrollIndicator={false}
+      bounces={false}
+      onContentSizeChange={() => chartScrollRef.current?.scrollToEnd({ animated: true })}>
+      <View style={[styles.chart, { height, width: chartWidth }]}>
+        {bars.map((bar, index) => (
           <View
-            key={`${i}-${v}`}
+            key={`bar-${index}`}
+            pointerEvents="none"
             style={[
               styles.chartBar,
               {
+                left: bar.x,
+                top: bar.topAnchor,
                 width: barWidth,
-                height: h,
-                opacity: 0.35 + 0.65 * clamp(pct, 0, 1),
+                height: bar.barHeight,
+                opacity: 0.35 + 0.65 * bar.pct,
               },
             ]}
           />
-        );
-      })}
-    </View>
+        ))}
+        {targetLineTop != null ? (
+          <View
+            pointerEvents="none"
+            style={[
+              styles.chartBaseLine,
+              {
+                top: targetLineTop,
+              },
+            ]}
+          />
+        ) : null}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -129,7 +164,8 @@ export default function ActiveSessionScreen() {
   const connectedRef = useRef<Device[]>([]);
   const calibrationValuesRef = useRef<number[]>([]);
   const calibrationSeenStepsRef = useRef<Set<number>>(new Set());
-  const feedbackSeenStepsRef = useRef<Set<number>>(new Set());
+  const lastCalibrationFpaUpdateCountRef = useRef<number>(0);
+  const lastFeedbackFpaUpdateCountRef = useRef<number>(0);
   const calibrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const calibrationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const csvRowsRef = useRef<string[]>([]);
@@ -176,7 +212,7 @@ export default function ActiveSessionScreen() {
     }
     calibrationValuesRef.current = [];
     calibrationSeenStepsRef.current = new Set();
-    setCalibrationStatus('Calibrating for 30 seconds. Walk naturally.');
+    setCalibrationStatus(`Calibrating for ${CALIBRATION_DURATION_SEC} seconds. Walk naturally.`);
     setIsCalibrating(true);
     setCalibrationSecondsLeft(CALIBRATION_DURATION_SEC);
     clearCalibrationTimers();
@@ -211,7 +247,7 @@ export default function ActiveSessionScreen() {
     setReceiverLabel('—');
     setSenderLabel('—');
     setHapticStatus('');
-    feedbackSeenStepsRef.current = new Set();
+    lastFeedbackFpaUpdateCountRef.current = 0;
   };
 
   const connectAndStart = async (devices: Device[]): Promise<boolean> => {
@@ -225,17 +261,18 @@ export default function ActiveSessionScreen() {
       }
       const { receiver, sender } = assignReceiverAndSenderDevices(connected);
       if (!sender) {
-        throw new Error('Need both IMU (RX) and haptics (TX) devices.');
+        throw new Error('Need both receiver (Shank) and transmitter (Foot) devices.');
       }
       connectedRef.current = connected.map(item => item.device);
       setConnectedCount(connected.length);
-      setReceiverLabel(labelDevice(receiver.device));
-      setSenderLabel(labelDevice(sender.device));
+      setReceiverLabel('Shank');
+      setSenderLabel('Foot');
       setError('');
       setCsvStatus('');
       resetPipeline();
       resetHapticsWriter();
-      feedbackSeenStepsRef.current = new Set();
+      lastCalibrationFpaUpdateCountRef.current = 0;
+      lastFeedbackFpaUpdateCountRef.current = 0;
       csvRowsRef.current = [];
       setFpaSeries([]);
       configureSender(sender.device);
@@ -429,17 +466,17 @@ export default function ActiveSessionScreen() {
   }, []);
 
   useEffect(() => {
-    if (!isCalibrating || !latest?.inFeedbackWindow) return;
+    if (!isCalibrating || !latest) return;
+    if (latest.fpaUpdateCount <= lastCalibrationFpaUpdateCountRef.current) return;
+    lastCalibrationFpaUpdateCountRef.current = latest.fpaUpdateCount;
     if (latest.stepCount <= CALIBRATION_IGNORE_INITIAL_STEPS) return;
-    if (calibrationSeenStepsRef.current.has(latest.stepCount)) return;
-    calibrationSeenStepsRef.current.add(latest.stepCount);
     calibrationValuesRef.current.push(latest.fpaThisStepDeg);
   }, [isCalibrating, latest]);
 
   useEffect(() => {
-    if (!latest?.inFeedbackWindow) return;
-    if (feedbackSeenStepsRef.current.has(latest.stepCount)) return;
-    feedbackSeenStepsRef.current.add(latest.stepCount);
+    if (!latest) return;
+    if (latest.fpaUpdateCount <= lastFeedbackFpaUpdateCountRef.current) return;
+    lastFeedbackFpaUpdateCountRef.current = latest.fpaUpdateCount;
     const manager = managerRef.current;
     if (!manager) return;
     const fpaDeg = latest.fpaThisStepDeg;
@@ -450,7 +487,7 @@ export default function ActiveSessionScreen() {
     if (!isCalibrating && diff != null && connectedRef.current.length > 1) {
       cmd = getAutoFeedbackCommand(diff);
       if (cmd) {
-        drv = cmd.startsWith('2') ? 'DRV2' : 'DRV1';
+        drv = cmd.startsWith('3') ? 'DRV3' : 'DRV0';
         effect = String(FEEDBACK_EFFECT);
         void (async () => {
           try {
@@ -471,7 +508,7 @@ export default function ActiveSessionScreen() {
       effect,
       sentCommand: cmd,
     });
-    setFpaSeries(prev => [...prev.slice(-(MAX_CHART_POINTS - 1)), fpaDeg]);
+    setFpaSeries(prev => [...prev, fpaDeg]);
   }, [latest, baseFpaDeg, isCalibrating, sendHaptic, appendCsvRow]);
 
   const canDisconnect = status === 'scanning' || connectedRef.current.length > 0;
@@ -479,9 +516,24 @@ export default function ActiveSessionScreen() {
   const currentFpa = latest ? latest.fpaThisStepDeg : null;
   const avgFpa =
     fpaSeries.length > 0 ? fpaSeries.reduce((sum, value) => sum + value, 0) / fpaSeries.length : null;
+  const currentDiffDeg = latest && baseFpaDeg != null ? latest.fpaThisStepDeg - baseFpaDeg : null;
+  const currentFeedbackCommand = currentDiffDeg == null ? '' : getAutoFeedbackCommand(currentDiffDeg);
+  const isWithinTargetRange = currentDiffDeg != null && currentFeedbackCommand === '';
+  const canStart = !isSessionRunning && status !== 'scanning';
+  const startButtonLabel = status === 'scanning' ? 'Connecting...' : isSessionRunning ? 'Connected' : 'Start';
+  const toeDirection =
+    currentDiffDeg == null
+      ? 'Awaiting baseline'
+      : currentFeedbackCommand.startsWith('3')
+        ? `Toe in (${currentFeedbackCommand})`
+        : currentFeedbackCommand.startsWith('0')
+          ? `Toe out (${currentFeedbackCommand})`
+          : 'Within target range';
   const feedbackWindowText = latest?.inFeedbackWindow
     ? 'In feedback window'
     : 'Outside feedback window';
+  const chartMeasuredMin = fpaSeries.length > 0 ? Math.min(...fpaSeries) : null;
+  const chartMeasuredMax = fpaSeries.length > 0 ? Math.max(...fpaSeries) : null;
 
   return (
     <ThemedView style={stylesThemed.container}>
@@ -499,7 +551,15 @@ export default function ActiveSessionScreen() {
           </ThemedView>
         </ThemedView>
 
-        <ThemedView style={stylesThemed.kpiCard}>
+        <ThemedView
+          style={[
+            stylesThemed.kpiCard,
+            currentDiffDeg == null
+              ? null
+              : isWithinTargetRange
+                ? stylesThemed.kpiCardInRange
+                : stylesThemed.kpiCardOutOfRange,
+          ]}>
           <ThemedText style={stylesThemed.kpiLabel}>Current FPA</ThemedText>
           <ThemedText style={stylesThemed.kpiValue}>
             {currentFpa != null ? `${currentFpa.toFixed(1)}°` : '—'}
@@ -516,14 +576,34 @@ export default function ActiveSessionScreen() {
           <ThemedText style={stylesThemed.kpiMeta}>
             Base: {baseFpaDeg != null ? `${baseFpaDeg.toFixed(2)}°` : '—'} | {feedbackWindowText}
           </ThemedText>
+          <ThemedText style={stylesThemed.kpiMeta}>Feedback direction: {toeDirection}</ThemedText>
         </ThemedView>
 
         <ThemedView style={stylesThemed.section}>
           <ThemedText type="subtitle">FPA over current session</ThemedText>
           <ThemedView style={stylesThemed.chartCard}>
-            <MiniBarChart data={fpaSeries} height={96} barWidth={6} />
+            <View style={stylesThemed.chartPlotRow}>
+              <View style={stylesThemed.chartRangeColumn}>
+                <ThemedText style={stylesThemed.chartRangeText}>
+                  {chartMeasuredMax != null ? `${chartMeasuredMax.toFixed(1)}°` : '—'}
+                </ThemedText>
+                <View style={stylesThemed.chartRangeStem} />
+                <ThemedText style={stylesThemed.chartRangeText}>
+                  {chartMeasuredMin != null ? `${chartMeasuredMin.toFixed(1)}°` : '—'}
+                </ThemedText>
+              </View>
+              <View style={stylesThemed.chartPlotMain}>
+                <MiniBarChart data={fpaSeries} height={96} barWidth={6} baseLineDeg={baseFpaDeg} />
+              </View>
+            </View>
             <View style={stylesThemed.chartLegendRow}>
               <ThemedText style={stylesThemed.muted}>Start</ThemedText>
+              <ThemedText style={stylesThemed.muted}>
+                Target:{' '}
+                {baseFpaDeg != null
+                  ? `${(baseFpaDeg + (FEEDBACK_TOE_IN_THRESHOLD_DEG + FEEDBACK_TOE_OUT_THRESHOLD_DEG) / 2).toFixed(1)}°`
+                  : '—'}
+              </ThemedText>
               <ThemedText style={stylesThemed.muted}>Now</ThemedText>
             </View>
           </ThemedView>
@@ -532,8 +612,12 @@ export default function ActiveSessionScreen() {
         <ThemedView style={stylesThemed.section}>
           <ThemedText type="subtitle">Controls</ThemedText>
           <View style={stylesThemed.row}>
-            <TouchableOpacity style={stylesThemed.button} onPress={onRescan} activeOpacity={0.75}>
-              <ThemedText style={stylesThemed.buttonText}>Start</ThemedText>
+            <TouchableOpacity
+              style={[stylesThemed.button, !canStart && stylesThemed.buttonDisabled]}
+              disabled={!canStart}
+              onPress={onRescan}
+              activeOpacity={0.75}>
+              <ThemedText style={stylesThemed.buttonText}>{startButtonLabel}</ThemedText>
             </TouchableOpacity>
             <TouchableOpacity
               style={[stylesThemed.buttonDanger, !canDisconnect && stylesThemed.buttonDisabled]}
@@ -572,19 +656,30 @@ export default function ActiveSessionScreen() {
 }
 
 const styles = StyleSheet.create({
+  chartScroll: {
+    width: '100%',
+  },
   chart: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 2,
+    position: 'relative',
     overflow: 'hidden',
   },
   chartBar: {
+    position: 'absolute',
     borderRadius: 4,
     backgroundColor: '#2F7EF7',
   },
   emptyChartText: {
     fontSize: 13,
     color: '#6B7280',
+  },
+  chartBaseLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 2,
+    borderRadius: 99,
+    backgroundColor: '#DC2626',
+    opacity: 0.92,
   },
 });
 
@@ -614,6 +709,14 @@ function createStyles(theme: (typeof Colors)['light']) {
       gap: 6,
       backgroundColor: theme.inputBackground,
     },
+    kpiCardInRange: {
+      borderColor: '#22C55E',
+      backgroundColor: 'rgba(34, 197, 94, 0.16)',
+    },
+    kpiCardOutOfRange: {
+      borderColor: '#EF4444',
+      backgroundColor: 'rgba(239, 68, 68, 0.16)',
+    },
     kpiLabel: { fontSize: 13, color: theme.muted },
     kpiValue: { fontSize: 44, lineHeight: 54, fontWeight: '800', color: theme.text },
     kpiMetaRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
@@ -626,6 +729,23 @@ function createStyles(theme: (typeof Colors)['light']) {
       padding: 12,
       gap: 8,
     },
+    chartPlotRow: { flexDirection: 'row', alignItems: 'stretch', gap: 0 },
+    chartRangeColumn: {
+      width: 42,
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      paddingVertical: 2,
+      gap: 6,
+    },
+    chartRangeText: { color: theme.muted, fontSize: 12 },
+    chartRangeStem: {
+      width: 2,
+      flex: 1,
+      borderRadius: 99,
+      backgroundColor: theme.border,
+      marginVertical: 2,
+    },
+    chartPlotMain: { flex: 1, justifyContent: 'flex-end' },
     chartLegendRow: { flexDirection: 'row', justifyContent: 'space-between' },
     button: {
       paddingHorizontal: 20,
@@ -655,6 +775,7 @@ function createStyles(theme: (typeof Colors)['light']) {
     buttonText: { color: theme.buttonOnPrimary, fontWeight: '700', fontSize: 16 },
     buttonTextSecondary: { color: theme.text, fontWeight: '700', fontSize: 16 },
     buttonDangerText: { color: theme.buttonOnPrimary, fontWeight: '700', fontSize: 16 },
+    errorText: { color: theme.buttonDestructive, fontSize: 13 },
   });
 }
 
