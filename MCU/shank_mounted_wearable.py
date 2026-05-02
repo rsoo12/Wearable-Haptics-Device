@@ -16,6 +16,12 @@ import struct
 
 _DRV_ADDR = 0x5A
 
+# left LRA
+MUX_CH1 = 1
+
+# right LRA
+MUX_CH2 = 2
+
 # Calibrated per-device values — limits set by auto-calibration, do not raise
 _CAL = {
     1: {"rated_voltage": 0x24, "od_clamp": 0x4C, "a_cal_comp": 0x0E, "a_cal_bemf": 0xB6, "bemf_gain": 1},
@@ -62,15 +68,13 @@ imu_i2c = busio.I2C(board.IMU_SCL, board.IMU_SDA)
 sensor = LSM6DS3TRC(imu_i2c)
 
 mux = adafruit_tca9548a.PCA9546A(i2c)
-drv_init(mux[1], _CAL[1])
-drv_init(mux[2], _CAL[2])
+drv_init(mux[MUX_CH1], _CAL[1])
+drv_init(mux[MUX_CH2], _CAL[2])
 
 ble.start_advertising(advertisement)
 
 seq = 0
 while True:
-    # drv1.sequence[0] = adafruit_drv2605.Effect(1)
-    # drv1.play()
     if ble.connected:
         led.value = False 
         waiting = uart.in_waiting
@@ -88,9 +92,9 @@ while True:
                 try:
                     drv_id = int(received_str[0])
                     if drv_id == 1:
-                        drv_buzz(mux[1])
+                        drv_buzz(mux[MUX_CH1])
                     elif drv_id == 2:
-                        drv_buzz(mux[2])
+                        drv_buzz(mux[MUX_CH2])
                     else:
                         print(f"Unknown driver: {drv_id}")
                 except Exception as e:
