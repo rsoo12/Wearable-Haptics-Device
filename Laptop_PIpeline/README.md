@@ -25,9 +25,12 @@ The script will scan for and connect to both BLE devices automatically. Once con
 | Variable | Location | Description |
 |---|---|---|
 | `ALGORITHM` | `run_device.py` | FPA algorithm plugin to use (default: `"sage_motion"`) |
-| `CALIBRATION` | `run_device.py` | `True` to run a 60-second calibration and save a new `base_fpa.csv`; `False` to load the existing baseline and begin feedback immediately |
 | `IS_RIGHT_FOOT` | `run_device.py` | Set to `True` if the IMU is on the right foot |
+| `CALIBRATION` | `run_device.py` | `True` to run a 60-second calibration and save a new `base_fpa.csv`; `False` to load the existing baseline and begin feedback immediately |
 | `CALIBRATION_DURATION` | `run_device.py` | Duration of the calibration phase in seconds (default: 60) |
+| `FEEDBACK_TOE_OUT_THRESHOLD_DEG` | `run_device.py` | FPA deviation above which toe-out feedback fires (default: −1°) |
+| `FEEDBACK_TOE_IN_THRESHOLD_DEG` | `run_device.py` | FPA deviation below which toe-in feedback fires (default: −9°) |
+| `FEEDBACK_EFFECT` | `run_device.py` | Haptic effect ID sent to the LRA driver (default: 12) |
 
 ### Calibration mode (`CALIBRATION = True`)
 
