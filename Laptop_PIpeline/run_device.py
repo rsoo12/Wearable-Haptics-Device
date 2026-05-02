@@ -42,13 +42,13 @@ FEEDBACK_EFFECT = 12
 
 def lra_feedback(diff, cmd_queue: asyncio.Queue):
     if diff > FEEDBACK_TOE_OUT_THRESHOLD_DEG:
-        drv = 1  # toe-out
+        drv = 1  # left
     elif diff < FEEDBACK_TOE_IN_THRESHOLD_DEG:
-        drv = 2  # toe-in
+        drv = 2  # right
     else:
         return None  # within threshold, no feedback
 
-    direction = "toe-out (drv1)" if drv == 1 else "toe-in (drv2)"
+    direction = "left (drv1)" if drv == 1 else "right (drv2)"
     cmd = f"{drv}{FEEDBACK_EFFECT}"
     print(f"[LRA Feedback] diff={diff:.2f} deg → {direction} → cmd='{cmd}'")
     cmd_queue.put_nowait(cmd)
