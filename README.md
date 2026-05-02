@@ -18,10 +18,10 @@ Gait analysis runs either on the **phone app** (iOS/Android) or in a **Python sc
 
 ```
 Wearable-Haptics-Device/
-├── MCU/                  CircuitPython firmware for both wearable MCUs
-├── Bluetooth/            Python real-time pipeline (laptop ↔ BLE devices)
-├── App/lkr-data/         React Native (Expo) mobile app
-└── Data_Processing/      Offline analysis scripts (FPA accuracy, training outcomes)
+├── MCU/                      CircuitPython firmware for both wearable MCUs
+├── Laptop_Pipeline/          Python real-time pipeline (laptop ↔ BLE devices)
+├── Smartphone_App_Pipeline/lkr-data/    React Native (Expo) mobile app
+└── Data_Processing/          Offline analysis scripts (FPA accuracy, training outcomes)
 ```
 
 ---
@@ -40,11 +40,11 @@ See [MCU/README.md](MCU/README.md) for flashing instructions and hardware setup.
 
 ---
 
-### Bluetooth — Python Pipeline
+### Laptop_Pipeline — Python Pipeline
 Real-time FPA computation and haptic feedback on a laptop.
 
 ```bash
-cd Bluetooth
+cd Laptop_Pipeline
 pip install uv && uv sync
 uv run python run_device.py
 ```
@@ -57,22 +57,22 @@ Configure at the top of `run_device.py`:
 | `IS_RIGHT_FOOT` | `True` if the IMU is on the right foot |
 | `CALIBRATION` | `True` to run a 60 s calibration walk; `False` to load `base_fpa.csv` |
 
-See [Bluetooth/README.md](Bluetooth/README.md) for full configuration, output format, and how to add a custom FPA algorithm.
+See [Laptop_Pipeline/README.md](Laptop_Pipeline/README.md) for full configuration, output format, and how to add a custom FPA algorithm.
 
 ---
 
-### App — Mobile Interface
+### Smartphone_App_Pipeline — Mobile Interface
 React Native (Expo) app for live monitoring, calibration, and session logging.
 
 ```bash
-cd App/lkr-data
+cd Smartphone_App_Pipeline/lkr-data
 npm install
 npx expo start
 ```
 
 Scan the QR code with Expo Go on iOS or Android. The app connects to both MCUs over BLE, runs the FPA pipeline on-device, and logs per-step data to a CSV that can be exported via the share sheet.
 
-An optional AWS backend enables session history and gait trend charts — see [App/lkr-data/README.md](App/lkr-data/README.md) for setup.
+An optional AWS backend enables session history and gait trend charts — see [Smartphone_App_Pipeline/lkr-data/README.md](Smartphone_App_Pipeline/lkr-data/README.md) for setup.
 
 ---
 
