@@ -18,7 +18,6 @@ CALIBRATION                  = _cfg["CALIBRATION"]
 CALIBRATION_DURATION         = _cfg["CALIBRATION_DURATION"]
 FEEDBACK_TOE_OUT_THRESHOLD_DEG = _cfg["FEEDBACK_TOE_OUT_THRESHOLD_DEG"]
 FEEDBACK_TOE_IN_THRESHOLD_DEG  = _cfg["FEEDBACK_TOE_IN_THRESHOLD_DEG"]
-FEEDBACK_EFFECT              = _cfg["FEEDBACK_EFFECT"]
 
 # Swap ALGORITHM in config.json to use a different FPA plugin.
 # Each plugin lives in algorithms/<name>/ and must export FPA and GaitPhase.
@@ -49,7 +48,7 @@ def lra_feedback(diff, cmd_queue: asyncio.Queue):
         return None  # within threshold, no feedback
 
     direction = "left (drv1)" if drv == 1 else "right (drv2)"
-    cmd = f"{drv}{FEEDBACK_EFFECT}"
+    cmd = str(drv)
     print(f"[LRA Feedback] diff={diff:.2f} deg → {direction} → cmd='{cmd}'")
     cmd_queue.put_nowait(cmd)
     return cmd

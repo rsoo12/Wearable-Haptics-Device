@@ -32,7 +32,6 @@ All settings are in `config.json`. No code changes needed.
 | `CALIBRATION_DURATION` | Duration of the calibration phase in seconds (default: 60) |
 | `FEEDBACK_TOE_OUT_THRESHOLD_DEG` | FPA deviation above which toe-out feedback fires (default: −1°) |
 | `FEEDBACK_TOE_IN_THRESHOLD_DEG` | FPA deviation below which toe-in feedback fires (default: −9°) |
-| `FEEDBACK_EFFECT` | Haptic effect ID sent to the LRA driver (default: 12) |
 
 ### Calibration mode (`CALIBRATION = True`)
 
