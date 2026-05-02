@@ -29,24 +29,20 @@ def parse_payload(payload: bytes):
 
 CALIBRATION_DURATION = 60  # seconds
 
+FEEDBACK_TOE_OUT_THRESHOLD_DEG = -1
+FEEDBACK_TOE_IN_THRESHOLD_DEG = -9
+FEEDBACK_EFFECT = 12
+
 def lra_feedback(diff, cmd_queue: asyncio.Queue):
-    # Positive diff → FPA below baseline (toe-in) → drv2
-    # Negative diff → FPA above baseline (toe-out) → drv1
-    if diff > -8:
-        drv = 1 #left
-    elif diff < -12:
-        drv = 2 #right
+    if diff > FEEDBACK_TOE_OUT_THRESHOLD_DEG:
+        drv = 1  # toe-out
+    elif diff < FEEDBACK_TOE_IN_THRESHOLD_DEG:
+        drv = 2  # toe-in
     else:
         return None  # within threshold, no feedback
 
-    # if diff < -14:
-    #     drv = 2 #right
-    # elif diff > -6:
-    #     drv = 1 #left
-    # else:
-    #     return None 
-    direction = "move toe in (drv2)" if drv == 1 else "move toe-out (drv1)"
-    cmd = f"{drv}52"
+    direction = "toe-out (drv1)" if drv == 1 else "toe-in (drv2)"
+    cmd = f"{drv}{FEEDBACK_EFFECT}"
     print(f"[LRA Feedback] diff={diff:.2f} deg → {direction} → cmd='{cmd}'")
     cmd_queue.put_nowait(cmd)
     return cmd
