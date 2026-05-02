@@ -1,66 +1,80 @@
-# Welcome to your Expo app 👋
+# lkr-data
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native (Expo) app for real-time gait analysis and haptic feedback with the wearable haptics device.
 
-## Get started
+---
 
-1. Install dependencies
+## What the App Does
 
-   ```bash
-   npm install
-   ```
+The app connects to the wearable device over Bluetooth Low Energy (BLE) and provides real-time foot progress angle (FPA) monitoring and haptic feedback during walking sessions.
 
-2. Start the app
+### Key Features
 
-   ```bash
-   npx expo start
-   ```
+- **BLE Connection** — Scans for and connects to the wearable MCU (`CIRCUITPY`) via the Nordic UART Service. Supports a dual-device setup (one sensor unit, one haptic feedback unit).
+- **Live IMU Processing** — Receives 6-axis IMU data (accelerometer + gyroscope) from the shank-mounted sensor at ~180 Hz and computes FPA per gait cycle directly on the phone.
+- **Calibration** — A 60-second baseline walk establishes the user's natural FPA reference. The first 7 steps are discarded to allow for a steady gait.
+- **Automatic Haptic Feedback** — Triggers vibration commands to the wearable when FPA deviates from the calibrated baseline:
+  - **Toe-in** (< −9° from baseline): activates driver 2
+  - **Toe-out** (> −1° from baseline): activates driver 1
+- **Session Logging** — Records per-step data (FPA, step number, sensor rate, commands sent, raw IMU values) to a CSV file that can be exported via the share sheet.
+- **Session History** *(optional, requires backend)* — Uploads completed session summaries to AWS and displays historical FPA trends and gait consistency scores.
 
-## Backend (AWS API Gateway + Lambda)
+### Screens
 
-This repo includes a minimal backend at `App/lkr-data/backend/` (AWS SAM).
+| Tab | Description |
+|-----|-------------|
+| **Active Session** | Real-time BLE connection, live FPA chart, step count, calibration controls |
+| **FPA** | On-device FPA processing with detailed per-step output |
+| **History** | Past session summaries with FPA trend charts (requires backend) |
+| **Insights** | Gait consistency scores and recommendations based on FPA variability |
 
-- Deploy it (see `App/lkr-data/backend/README.md`) to get an `ApiBaseUrl`
-- Set that URL in the app as `EXPO_PUBLIC_API_BASE_URL`
+---
 
-Example (macOS/zsh, from `App/lkr-data`):
+## Setup
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (v18+)
+- [Expo Go](https://expo.dev/go) installed on your iOS or Android phone
+- The phone and wearable device must be in Bluetooth range
+
+### Install Dependencies
+
+From the `App/lkr-data` directory:
 
 ```bash
-export EXPO_PUBLIC_API_BASE_URL="https://abc123.execute-api.us-east-1.amazonaws.com/prod"
+npm install
+```
+
+### Run the App
+
+```bash
 npx expo start
 ```
 
-Then open the **Backend** tab. It auto-scans for the BLE device and streams packets to Lambda.
+Scan the QR code with:
+- **iOS** — the Camera app (opens in Expo Go)
+- **Android** — the Expo Go app directly
 
-In the output, you'll find options to open the app in a
+The app will prompt for Bluetooth permissions on first launch — these are required for BLE communication with the wearable.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Backend Setup (Optional)
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+Session history and cloud sync require an AWS backend. Skip this if you only need live sessions and local CSV export.
 
-## Get a fresh project
+1. Deploy the backend:
 
-When you're ready, run:
+   ```bash
+   cd backend
+   sam build
+   sam deploy --guided
+   ```
 
-```bash
-npm run reset-project
-```
+2. Copy the `ApiBaseUrl` from the deploy output and set it as an environment variable before starting the app:
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+   ```bash
+   export EXPO_PUBLIC_API_BASE_URL="https://<your-api-id>.execute-api.us-east-1.amazonaws.com/prod"
+   npx expo start
+   ```
 
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+See [backend/README.md](backend/README.md) for full deployment details.
