@@ -1,4 +1,4 @@
-# Bluetooth
+# Laptop Pipeline
 
 Real-time data pipeline for the wearable haptics device. Receives IMU data from the foot-mounted MCU over BLE, computes foot progression angle (FPA) using a gait phase detection algorithm, and transmits vibration commands to the shank-mounted LRA MCU.
 
@@ -7,7 +7,7 @@ Real-time data pipeline for the wearable haptics device. Receives IMU data from 
 Requires Python 3.10+. Dependencies are managed with [uv](https://docs.astral.sh/uv/).
 
 ```bash
-cd Bluetooth
+cd Laptop_Pipeline
 pip install uv
 uv sync
 ```
@@ -18,19 +18,21 @@ uv sync
 uv run python run_device.py
 ```
 
-The script will scan for and connect to both BLE devices automatically. Once connected, it will either run a **calibration phase** or load a previously saved baseline FPA from `base_fpa.csv`, depending on the `CALIBRATION` flag at the top of `run_device.py`.
+The script will scan for and connect to both BLE devices automatically. Once connected, it will either run a **calibration phase** or load a previously saved baseline FPA from `base_fpa.csv`, depending on the `CALIBRATION` flag in `config.json`.
 
 ### Configuration
 
-| Variable | Location | Description |
-|---|---|---|
-| `ALGORITHM` | `run_device.py` | FPA algorithm plugin to use (default: `"sage_motion"`) |
-| `IS_RIGHT_FOOT` | `run_device.py` | Set to `True` if the IMU is on the right foot |
-| `CALIBRATION` | `run_device.py` | `True` to run a 60-second calibration and save a new `base_fpa.csv`; `False` to load the existing baseline and begin feedback immediately |
-| `CALIBRATION_DURATION` | `run_device.py` | Duration of the calibration phase in seconds (default: 60) |
-| `FEEDBACK_TOE_OUT_THRESHOLD_DEG` | `run_device.py` | FPA deviation above which toe-out feedback fires (default: −1°) |
-| `FEEDBACK_TOE_IN_THRESHOLD_DEG` | `run_device.py` | FPA deviation below which toe-in feedback fires (default: −9°) |
-| `FEEDBACK_EFFECT` | `run_device.py` | Haptic effect ID sent to the LRA driver (default: 12) |
+All settings are in `config.json`. No code changes needed.
+
+| Variable | Description |
+|---|---|
+| `ALGORITHM` | FPA algorithm plugin to use (default: `"sage_motion"`) |
+| `IS_RIGHT_FOOT` | Set to `true` if the IMU is on the right foot |
+| `CALIBRATION` | `true` to run a 60-second calibration and save a new `base_fpa.csv`; `false` to load the existing baseline and begin feedback immediately |
+| `CALIBRATION_DURATION` | Duration of the calibration phase in seconds (default: 60) |
+| `FEEDBACK_TOE_OUT_THRESHOLD_DEG` | FPA deviation above which toe-out feedback fires (default: −1°) |
+| `FEEDBACK_TOE_IN_THRESHOLD_DEG` | FPA deviation below which toe-in feedback fires (default: −9°) |
+| `FEEDBACK_EFFECT` | Haptic effect ID sent to the LRA driver (default: 12) |
 
 ### Calibration mode (`CALIBRATION = True`)
 
@@ -58,6 +60,7 @@ Per-session logs are written to `output/fpa_log_<timestamp>.csv` with the follow
 
 | File | Description |
 |---|---|
+| `config.json` | All runtime configuration (thresholds, calibration, algorithm selection) |
 | `run_device.py` | Main entry point — BLE connection, FPA computation, haptic feedback |
 | `bluetooth.py` | BLE device discovery and read/write connection management |
 | `algorithms/base.py` | Shared gait phase constants and Protocol interfaces for algorithm plugins |
@@ -88,4 +91,4 @@ Algorithm plugins live in `algorithms/<name>/`. To use a different algorithm:
 
    `sensor_data` is a dict with keys `AccelX/Y/Z` (m/s²) and `GyroX/Y/Z` (deg/s).
 
-3. Set `ALGORITHM = "<your_algorithm>"` at the top of `run_device.py`.
+3. Set `"ALGORITHM": "<your_algorithm>"` in `config.json`.

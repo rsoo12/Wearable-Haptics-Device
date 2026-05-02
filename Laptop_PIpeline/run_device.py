@@ -2,24 +2,31 @@ import asyncio
 import struct
 import math
 import csv
+import json
 import os
 from datetime import datetime
 
 import importlib
 
-# Swap this to use a different FPA algorithm plugin.
-# Each plugin lives in algorithms/<name>/ and must export FPA and GaitPhase.
-ALGORITHM = "sage_motion"
+with open(os.path.join(os.path.dirname(__file__), "config.json")) as _f:
+    _cfg = json.load(_f)
 
+ALGORITHM                    = _cfg["ALGORITHM"]
+IS_RIGHT_FOOT                = _cfg["IS_RIGHT_FOOT"]
+DATA_RATE                    = _cfg["DATA_RATE"]
+CALIBRATION                  = _cfg["CALIBRATION"]
+CALIBRATION_DURATION         = _cfg["CALIBRATION_DURATION"]
+FEEDBACK_TOE_OUT_THRESHOLD_DEG = _cfg["FEEDBACK_TOE_OUT_THRESHOLD_DEG"]
+FEEDBACK_TOE_IN_THRESHOLD_DEG  = _cfg["FEEDBACK_TOE_IN_THRESHOLD_DEG"]
+FEEDBACK_EFFECT              = _cfg["FEEDBACK_EFFECT"]
+
+# Swap ALGORITHM in config.json to use a different FPA plugin.
+# Each plugin lives in algorithms/<name>/ and must export FPA and GaitPhase.
 _algo = importlib.import_module(f"algorithms.{ALGORITHM}")
 FPA = _algo.FPA
 GaitPhase = _algo.GaitPhase
 
 from bluetooth import find_devices, BLEConnection
- 
-IS_RIGHT_FOOT = True  
-DATA_RATE = 100  # Hz
-CALIBRATION = False
 
 os.makedirs("output", exist_ok=True)
 CSV_FILE = f"output/fpa_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
@@ -32,13 +39,6 @@ def parse_payload(payload: bytes):
     acc = [ax, ay, az]
     gyr = [gx, gy, gz]
     return gyr, acc
-
-
-CALIBRATION_DURATION = 60  # seconds
-
-FEEDBACK_TOE_OUT_THRESHOLD_DEG = -1
-FEEDBACK_TOE_IN_THRESHOLD_DEG = -9
-FEEDBACK_EFFECT = 12
 
 def lra_feedback(diff, cmd_queue: asyncio.Queue):
     if diff > FEEDBACK_TOE_OUT_THRESHOLD_DEG:
