@@ -59,3 +59,8 @@ The default BLE ATT MTU allows only 20 bytes of payload per packet. Since the IM
 ## Debugging
 
 - If saving fails with a `READ-ONLY` error, press the reset button on the XIAO once quickly
+
+- If vibration feedback stops working, identify the cause using the checklist below:
+  1. **LRA disconnected** — Reconnect the LRA to the haptic driver.
+  2. **Faulty wiring or port** — Unplug the wire connecting the haptic driver to the main device and reconnect it. If the issue persists, repeat with the opposite end of the wire.
+  3. **Corrupted mux** — Replace the mux component with a new one.
