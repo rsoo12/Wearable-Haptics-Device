@@ -22,21 +22,6 @@
 9. Press **Ctrl+D** in the mpremote terminal to run the code
 10. Press **Ctrl+C** to stop the code
 
-## Bluetooth Behavior
-
-- The code waits for a BLE connection. Once connected, the blue LED on the MCU will turn on.
-- IMU acceleration data is sent once per second to the connected device.
-- Sending `0x61` vibrates the LRA on mux port 3
-- Sending `0x62` vibrates a different pattern
-- Any other value triggers a third vibration pattern
-
-## Testing Without a Laptop
-
-1. Save the code to the device (**Ctrl+S** in VSCode), then unplug the USB-C cable
-2. The MCU will automatically run the code (the `while True` loop runs indefinitely)
-3. To restart and set up a new Bluetooth connection, press the reset button once quickly
-
-> **Note:** Pressing reset **twice** will erase the code from the MCU entirely.
 
 ## Increasing BLE Packet Size to 24 Bytes
 
@@ -54,6 +39,22 @@ The default BLE ATT MTU allows only 20 bytes of payload per packet. Since the IM
 3. Save the file — this change persists on the device but will be overwritten if you reinstall the library via `circup`
 
 > **Note:** Re-running `circup install --auto` will reset this change. Re-apply the patch after any library update.
+
+## Bluetooth Behavior
+
+- The code waits for a BLE connection. Once connected, the blue LED on the MCU will turn on.
+- IMU acceleration data is sent once per second to the connected device.
+- Sending `0x61` vibrates the LRA on mux port 3
+- Sending `0x62` vibrates a different pattern
+- Any other value triggers a third vibration pattern
+
+## Testing Without a Laptop
+
+1. Save the code to the device (**Ctrl+S** in VSCode), then unplug the USB-C cable
+2. The MCU will automatically run the code (the `while True` loop runs indefinitely)
+3. To restart and set up a new Bluetooth connection, press the reset button once quickly
+
+> **Note:** Pressing reset **twice** will erase the code from the MCU entirely.
 
 ## Debugging
 
