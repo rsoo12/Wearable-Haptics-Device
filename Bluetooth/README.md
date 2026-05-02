@@ -15,18 +15,18 @@ uv sync
 ## Running
 
 ```bash
-uv run python vqf_processor.py
+uv run python run_device.py
 ```
 
-The script will scan for and connect to both BLE devices automatically. Once connected, it will either run a **calibration phase** or load a previously saved baseline FPA from `base_fpa.csv`, depending on the `CALIBRATION` flag at the top of `vqf_processor.py`.
+The script will scan for and connect to both BLE devices automatically. Once connected, it will either run a **calibration phase** or load a previously saved baseline FPA from `base_fpa.csv`, depending on the `CALIBRATION` flag at the top of `run_device.py`.
 
 ### Configuration
 
 | Variable | Location | Description |
 |---|---|---|
-| `CALIBRATION` | `vqf_processor.py:15` | `True` to run a 60-second calibration and save a new `base_fpa.csv`; `False` to load the existing baseline and begin feedback immediately |
-| `IS_RIGHT_FOOT` | `vqf_processor.py:13` | Set to `True` if the IMU is on the right foot |
-| `CALIBRATION_DURATION` | `vqf_processor.py:30` | Duration of the calibration phase in seconds (default: 60) |
+| `CALIBRATION` | `run_device.py:15` | `True` to run a 60-second calibration and save a new `base_fpa.csv`; `False` to load the existing baseline and begin feedback immediately |
+| `IS_RIGHT_FOOT` | `run_device.py:13` | Set to `True` if the IMU is on the right foot |
+| `CALIBRATION_DURATION` | `run_device.py:30` | Duration of the calibration phase in seconds (default: 60) |
 
 ### Calibration mode (`CALIBRATION = True`)
 
@@ -54,7 +54,7 @@ Per-session logs are written to `output/fpa_log_<timestamp>.csv` with the follow
 
 | File | Description |
 |---|---|
-| `vqf_processor.py` | Main entry point — BLE connection, FPA computation, haptic feedback |
+| `run_device.py` | Main entry point — BLE connection, FPA computation, haptic feedback |
 | `bluetooth.py` | BLE device discovery and read/write connection management |
 | `gaitphase.py` | Gait phase detection (stance, swing, feedback window) |
 | `FPA_algorithm.py` | FPA estimation from IMU sensor data |
