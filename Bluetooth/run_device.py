@@ -5,8 +5,15 @@ import csv
 import os
 from datetime import datetime
 
-from FPA_algorithm import FPA
-from gaitphase import GaitPhase
+import importlib
+
+# Swap this to use a different FPA algorithm plugin.
+# Each plugin lives in algorithms/<name>/ and must export FPA and GaitPhase.
+ALGORITHM = "sage_motion"
+
+_algo = importlib.import_module(f"algorithms.{ALGORITHM}")
+FPA = _algo.FPA
+GaitPhase = _algo.GaitPhase
 
 from bluetooth import find_devices, BLEConnection
  

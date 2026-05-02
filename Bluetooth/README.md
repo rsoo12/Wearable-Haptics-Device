@@ -24,9 +24,10 @@ The script will scan for and connect to both BLE devices automatically. Once con
 
 | Variable | Location | Description |
 |---|---|---|
-| `CALIBRATION` | `run_device.py:15` | `True` to run a 60-second calibration and save a new `base_fpa.csv`; `False` to load the existing baseline and begin feedback immediately |
-| `IS_RIGHT_FOOT` | `run_device.py:13` | Set to `True` if the IMU is on the right foot |
-| `CALIBRATION_DURATION` | `run_device.py:30` | Duration of the calibration phase in seconds (default: 60) |
+| `ALGORITHM` | `run_device.py` | FPA algorithm plugin to use (default: `"sage_motion"`) |
+| `CALIBRATION` | `run_device.py` | `True` to run a 60-second calibration and save a new `base_fpa.csv`; `False` to load the existing baseline and begin feedback immediately |
+| `IS_RIGHT_FOOT` | `run_device.py` | Set to `True` if the IMU is on the right foot |
+| `CALIBRATION_DURATION` | `run_device.py` | Duration of the calibration phase in seconds (default: 60) |
 
 ### Calibration mode (`CALIBRATION = True`)
 
@@ -56,7 +57,32 @@ Per-session logs are written to `output/fpa_log_<timestamp>.csv` with the follow
 |---|---|
 | `run_device.py` | Main entry point — BLE connection, FPA computation, haptic feedback |
 | `bluetooth.py` | BLE device discovery and read/write connection management |
-| `gaitphase.py` | Gait phase detection (stance, swing, feedback window) |
-| `FPA_algorithm.py` | FPA estimation from IMU sensor data |
-| `const.py` | Shared constants |
+| `algorithms/base.py` | Shared gait phase constants and Protocol interfaces for algorithm plugins |
+| `algorithms/sage_motion/` | Default FPA algorithm (ported from SageMotion) |
 | `base_fpa.csv` | Saved baseline FPA from the most recent calibration |
+
+## Swapping or Adding an FPA Algorithm
+
+Algorithm plugins live in `algorithms/<name>/`. To use a different algorithm:
+
+1. Create a new folder: `algorithms/<your_algorithm>/`
+2. Add an `__init__.py` that exports two classes — `FPA` and `GaitPhase` — matching the interfaces in `algorithms/base.py`:
+
+   ```python
+   # algorithms/base.py defines these protocols:
+
+   class FPAAlgorithm(Protocol):
+       FPA_this_step: float
+       def update_FPA(self, sensor_data: dict, gaitphase_old: int, gaitphase: int) -> None: ...
+
+   class GaitPhaseDetector(Protocol):
+       gaitphase: int
+       gaitphase_old: int
+       step_count: int
+       in_feedback_window: bool
+       def update_gaitphase(self, sensor_data: dict) -> None: ...
+   ```
+
+   `sensor_data` is a dict with keys `AccelX/Y/Z` (m/s²) and `GyroX/Y/Z` (deg/s).
+
+3. Set `ALGORITHM = "<your_algorithm>"` at the top of `run_device.py`.

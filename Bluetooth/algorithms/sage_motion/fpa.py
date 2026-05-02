@@ -3,19 +3,14 @@
 import math
 
 import numpy as np
-from scipy.signal import butter, filtfilt, lfilter, firwin
+from scipy.signal import butter, filtfilt
 import transforms3d
-from const import EARLY_STANCE, MIDDLE_STANCE, LATE_STANCE, SWING, EULER_INIT_LEN
+from algorithms.base import EARLY_STANCE, MIDDLE_STANCE, EULER_INIT_LEN
 
 
 class FPA:
 
     def __init__(self, is_right_foot, datarate=100, alpha=0.8):
-        """
-        @input: is_right_foot, bool value, True = sensor put on the right foot
-                False = sensor put on the left foot
-        @input: datarate, the update rate, unit is Hz.
-        """
         self.datarate = datarate
         self.ALPHA = alpha
         self.FPA_this_step = 0.0
@@ -23,9 +18,7 @@ class FPA:
         self.step_data_buffer = []
         self.is_right_foot = is_right_foot
 
-    # Calculate the foot progression angle
     def update_FPA(self, data, gaitphase_old, gaitphase):
-
         self.step_data_buffer.append(data)
         if gaitphase_old == EARLY_STANCE and gaitphase == MIDDLE_STANCE:
             euler_angles_esti = self.get_euler_angles(
@@ -43,10 +36,7 @@ class FPA:
             self.step_data_buffer = []
             if self.is_right_foot:
                 self.FPA_this_step = -self.FPA_this_step
-            else:
-                self.FPA_this_step = self.FPA_this_step
 
-            # filter
             self.FPA_this_step = (
                 self.FPA_this_step * self.ALPHA + (1 - self.ALPHA) * self.FPA_last_step
             )
@@ -58,7 +48,6 @@ class FPA:
         data_len = len(data_buffer)
         euler_angles_esti = np.zeros([data_len, 3])
 
-        """1. initialize using the last couple samples"""
         gravity_vector = np.zeros([3])
         for i_sample in range(-1, -(EULER_INIT_LEN + 1), -1):
             sample_data = data_buffer[i_sample]
@@ -69,18 +58,16 @@ class FPA:
         init_sample = data_len - math.ceil(EULER_INIT_LEN / 2)
         euler_angles_esti[init_sample:, 0] = np.arctan2(
             gravity_vector[1], gravity_vector[2]
-        )  # axis 0
+        )
         euler_angles_esti[init_sample:, 1] = np.arctan2(
             -gravity_vector[0], np.sqrt(gravity_vector[1] ** 2 + gravity_vector[2] ** 2)
-        )  # axis 1
+        )
 
-        """2. Gyr integration"""
         for i_sample in range(init_sample - 1, -1, -1):
             sample_data = data_buffer[i_sample]
             sample_gyr = np.deg2rad(
                 [sample_data["GyroX"], sample_data["GyroY"], sample_data["GyroZ"]]
             )
-
             roll, pitch, yaw = euler_angles_esti[i_sample + 1, :]
             transfer_mat = np.asmatrix(
                 [
@@ -99,7 +86,6 @@ class FPA:
     @staticmethod
     def smooth_acc_rotated(acc_rotated, smooth_win_len=29):
         data_len = acc_rotated.shape[0]
-
         acc_rotated_smoothed = np.zeros(acc_rotated.shape)
         smooth_win_len = min(data_len, smooth_win_len)
         for i_axis in range(2):
@@ -147,7 +133,6 @@ class FPA:
 
     @staticmethod
     def smooth(x, window_len, window):
-
         window_fuction_dict = {
             "flat": np.ones(window_len, "d"),
             "hanning": np.hanning(window_len),
@@ -155,7 +140,6 @@ class FPA:
             "bartlett": np.bartlett(window_len),
             "blackman": np.blackman(window_len),
         }
-
         w = window_fuction_dict[window]
         y = np.convolve(w / w.sum(), x, mode="same")
         return y
