@@ -99,12 +99,25 @@ export async function writeNordicUartTx(
   manager: BleManager,
   deviceId: string,
   payload: string,
+  serviceUUID?: string | null,
 ): Promise<void> {
   const base64Payload = btoa(payload);
-  await manager.writeCharacteristicWithResponseForDevice(
-    deviceId,
-    NORDIC_UART_SERVICE_UUID,
-    NORDIC_UART_TX_CHAR_UUID,
-    base64Payload,
-  );
+  const writeServiceUUID = serviceUUID ?? NORDIC_UART_SERVICE_UUID;
+  try {
+    // Match Python path (Bleak write with response=False) for best compatibility.
+    await manager.writeCharacteristicWithoutResponseForDevice(
+      deviceId,
+      writeServiceUUID,
+      NORDIC_UART_TX_CHAR_UUID,
+      base64Payload,
+    );
+  } catch {
+    // Fallback for devices that require acknowledged writes.
+    await manager.writeCharacteristicWithResponseForDevice(
+      deviceId,
+      writeServiceUUID,
+      NORDIC_UART_TX_CHAR_UUID,
+      base64Payload,
+    );
+  }
 }

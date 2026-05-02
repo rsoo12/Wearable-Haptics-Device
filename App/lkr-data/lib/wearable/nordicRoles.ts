@@ -12,7 +12,7 @@ export function assignReceiverAndSenderDevices<T extends { device: Device }>(
   const findByName = (name: string) =>
     connected.find(entry => (entry.device.name ?? '').toUpperCase() === name.toUpperCase()) ?? null;
   const knownImu = findByName('CIRCUITPY4F33');
-  const knownLra = findByName('CIRCUITPY9391');
+  const knownLra = findByName('CIRCUITPY174d');
   if (knownImu && knownLra) {
     return { receiver: knownImu, sender: knownLra };
   }

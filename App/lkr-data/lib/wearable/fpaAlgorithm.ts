@@ -24,7 +24,7 @@ export class FPA {
     this.ALPHA = alpha;
   }
 
-  updateFPA(data: SensorData, gaitphaseOld: number, gaitphase: number): void {
+  updateFPA(data: SensorData, gaitphaseOld: number, gaitphase: number): boolean {
     this.stepDataBuffer.push(data);
     if (gaitphaseOld === EARLY_STANCE && gaitphase === MIDDLE_STANCE) {
       const eulerAnglesEsti = FPA.getEulerAngles(this.stepDataBuffer, this.datarate);
@@ -42,7 +42,9 @@ export class FPA {
       }
       this.FPA_this_step = this.ALPHA * fpa + (1 - this.ALPHA) * this.FPA_last_step;
       this.FPA_last_step = this.FPA_this_step;
+      return true;
     }
+    return false;
   }
 
   /** Matches Python `data_filt` (Butterworth + filtfilt). */

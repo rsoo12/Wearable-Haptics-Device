@@ -11,6 +11,10 @@ export type FpaPipelineOutput = {
   /** Estimated notification rate (Hz), trailing window. */
   rateHz: number;
   inFeedbackWindow: boolean;
+  /** True only on the sample where a new per-step FPA is computed. */
+  fpaUpdated: boolean;
+  /** Monotonic counter for each computed per-step FPA update. */
+  fpaUpdateCount: number;
   stepCount: number;
   fpaThisStepDeg: number;
   /** Process-wide run counter, survives multiple pipeline runs. */
@@ -27,6 +31,7 @@ export class FpaPipeline {
   private readonly timestamps: number[] = [];
   private readonly windowSize: number;
   private readonly globalRunNumber: number;
+  private fpaUpdateCount = 0;
 
   constructor(options?: {
     datarate?: number;
@@ -62,11 +67,16 @@ export class FpaPipeline {
     const fpa = this.fpa;
     const rateHz = this.calcRate(monoSec);
     gp.updateGaitphase(sensorData);
-    fpa.updateFPA(sensorData, gp.gaitphaseOld, gp.gaitphase);
+    const fpaUpdated = fpa.updateFPA(sensorData, gp.gaitphaseOld, gp.gaitphase);
+    if (fpaUpdated) {
+      this.fpaUpdateCount += 1;
+    }
     return {
       sensorData,
       rateHz,
       inFeedbackWindow: gp.inFeedbackWindow,
+      fpaUpdated,
+      fpaUpdateCount: this.fpaUpdateCount,
       stepCount: gp.stepCount,
       fpaThisStepDeg: fpa.FPA_this_step,
       globalRunNumber: this.globalRunNumber,
@@ -95,5 +105,6 @@ export class FpaPipeline {
     const isRf = this.fpa.isRightFoot;
     this.gaitPhase = new GaitPhase(dr);
     this.fpa = new FPA(isRf, dr);
+    this.fpaUpdateCount = 0;
   }
 }
