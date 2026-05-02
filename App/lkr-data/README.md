@@ -36,7 +36,7 @@ The app connects to the wearable device over Bluetooth Low Energy (BLE) and prov
 
 - [Node.js](https://nodejs.org/) (v18+)
 - [Expo Go](https://expo.dev/go) installed on your iOS or Android phone
-- The phone and wearable device must be in Bluetooth range
+- The phone and wearable device must be in Bluetooth range of each other
 
 ### Install Dependencies
 
