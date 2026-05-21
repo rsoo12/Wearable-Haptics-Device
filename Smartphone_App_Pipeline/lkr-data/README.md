@@ -40,9 +40,10 @@ The app connects to the wearable device over Bluetooth Low Energy (BLE) and prov
 
 ### Install Dependencies
 
-From the `App/lkr-data` directory:
+From `Smartphone_App_Pipeline/lkr-data`:
 
 ```bash
+cd Smartphone_App_Pipeline/lkr-data
 npm install
 ```
 
@@ -77,4 +78,4 @@ Session history and cloud sync require an AWS backend. Skip this if you only nee
    npx expo start
    ```
 
-See [backend/README.md](backend/README.md) for full deployment details.
+See [backend/README.md](backend/README.md) for API details, [app-deploy.md](app-deploy.md) for run/deploy steps, and [app-overview.md](app-overview.md) for architecture.

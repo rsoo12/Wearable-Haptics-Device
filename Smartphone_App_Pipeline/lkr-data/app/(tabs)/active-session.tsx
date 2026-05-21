@@ -275,7 +275,7 @@ export default function ActiveSessionScreen() {
       lastFeedbackFpaUpdateCountRef.current = 0;
       csvRowsRef.current = [];
       setFpaSeries([]);
-      configureSender(sender.device, sender.rxServiceUUID);
+      configureSender(sender.device);
       await startPipeline(receiver.device);
       setStatus('connected');
       startedAtRef.current = Date.now();

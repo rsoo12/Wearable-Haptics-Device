@@ -183,7 +183,7 @@ export default function FpaScreen() {
       resetHapticsWriter();
       feedbackSeenStepsRef.current = new Set();
       csvRowsRef.current = [];
-      configureSender(sender.device, sender.rxServiceUUID);
+      configureSender(sender.device);
       await startPipeline(receiver.device);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

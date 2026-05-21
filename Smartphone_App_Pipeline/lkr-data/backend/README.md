@@ -13,7 +13,7 @@ This is the backend for the mobile app:
 
 ## Deploy
 
-From `App/lkr-data/backend`:
+From `Smartphone_App_Pipeline/lkr-data/backend`:
 
 ```bash
 sam build

@@ -9,16 +9,13 @@ import { writeNordicUartTx } from '@/lib/wearable/nordicUart';
  */
 export function useWearableHapticsWriter() {
   const senderIdRef = useRef<string | null>(null);
-  const senderServiceUuidRef = useRef<string | null>(null);
 
-  const configureSender = useCallback((device: Device | null, serviceUuid?: string | null) => {
+  const configureSender = useCallback((device: Device | null) => {
     senderIdRef.current = device?.id ?? null;
-    senderServiceUuidRef.current = serviceUuid ?? null;
   }, []);
 
   const reset = useCallback(() => {
     senderIdRef.current = null;
-    senderServiceUuidRef.current = null;
   }, []);
 
   const send = useCallback(async (manager: BleManager, payload: string) => {
@@ -26,7 +23,7 @@ export function useWearableHapticsWriter() {
     if (!id) {
       throw new Error('No haptics (sender) device is connected.');
     }
-    await writeNordicUartTx(manager, id, payload, senderServiceUuidRef.current);
+    await writeNordicUartTx(manager, id, payload);
   }, []);
 
   return { configureSender, send, reset };
